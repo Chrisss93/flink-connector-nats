@@ -1,6 +1,7 @@
 package com.github.chrisss93.connector.nats.source.enumerator;
 
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
+import com.google.common.collect.ImmutableSet;
 import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.DeliverPolicy;
@@ -9,13 +10,11 @@ import org.junit.jupiter.api.Test;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-//import static org.assertj.core.api.List
 
 public class JetStreamSourceEnumStateSerializerTest {
 
@@ -50,12 +49,21 @@ public class JetStreamSourceEnumStateSerializerTest {
                 .build()
         );
 
+        JetStreamConsumerSplit yellow = new JetStreamConsumerSplit("colour",
+            ConsumerConfiguration.builder()
+                .name("yellow").filterSubject("colour.yellow.*")
+                .replayPolicy(ReplayPolicy.Instant)
+                .ackPolicy(AckPolicy.Explicit)
+                .deliverPolicy(DeliverPolicy.Last)
+                .build()
+        );
+
         Set<JetStreamConsumerSplit> assignedSplits = new HashSet<>();
-        Map<Integer, JetStreamConsumerSplit> pendingSplitAssignments = new HashMap<>();
+        Map<Integer, Set<JetStreamConsumerSplit>> pendingSplitAssignments = new HashMap<>();
 
         assignedSplits.add(red);
-        pendingSplitAssignments.put(2, green);
-        pendingSplitAssignments.put(3, blue);
+        pendingSplitAssignments.put(2, Collections.singleton(green));
+        pendingSplitAssignments.put(3, Stream.of(blue, yellow).collect(Collectors.toSet()));
 
         JetStreamSourceEnumState myEnum = new JetStreamSourceEnumState(assignedSplits, pendingSplitAssignments);
         JetStreamSourceEnumStateSerializer serializer = new JetStreamSourceEnumStateSerializer();
@@ -63,10 +71,14 @@ public class JetStreamSourceEnumStateSerializerTest {
         byte[] b = serializer.serialize(myEnum);
         JetStreamSourceEnumState deserializedEnum = serializer.deserialize(0, b);
 
-        assertThat(deserializedEnum.getPendingSplitAssignments())
-            .isEqualTo(myEnum.getPendingSplitAssignments());
         assertThat(deserializedEnum.getAssignedSplits())
             .containsExactlyInAnyOrderElementsOf(myEnum.getAssignedSplits());
-    }
 
+        assertThat(deserializedEnum.getPendingAssignments().keySet())
+            .isEqualTo(myEnum.getPendingAssignments().keySet());
+
+        deserializedEnum.getPendingAssignments().forEach(
+            (k, v) -> assertThat(v).containsExactlyInAnyOrderElementsOf(myEnum.getPendingAssignments().get(k))
+        );
+    }
 }

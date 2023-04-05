@@ -6,6 +6,7 @@ import io.nats.client.*;
 import io.nats.client.api.ConsumerConfiguration;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
+import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,19 +19,6 @@ import java.util.stream.Stream;
 
 import static org.apache.pulsar.shade.org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 
-/*
-    This enumerator is designed for use with the ConsumerSourceReader and ConsumerSplitReader which each only accept
-    a single split. This enumerator defensively shouldn't try to assign more than 1 split to it (hence the
-    representation of a reader->split assignment is a 1:1 map instead of a 1:N map like in Kafka and Pulsar source
-    enumerators.
-
-    This may be overly defensive. Test, and if possible, relax the data-structure to the more generalizable form
-    as Kafka/Pulsar source enumerators.
- */
-
-// TODO: Check if stream filter-subjects have any wildcards. If they don't, the stream's individual subjects may be
-//   treated as static and they can be evenly assigned to some configurable number of splits.
-
 public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsumerSplit, JetStreamSourceEnumState> {
     private static final Logger LOG = LoggerFactory.getLogger(JetStreamSourceEnumerator.class);
     private final Options connectOpts;
@@ -40,7 +28,7 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
     private final boolean dynamicConsumers;
 
     private final Set<JetStreamConsumerSplit> assignedSplits = new HashSet<>();
-    private final Map<Integer, JetStreamConsumerSplit> pendingSplitAssignments = new HashMap<>();
+    private final Map<Integer, Set<JetStreamConsumerSplit>> pendingSplitAssignments = new HashMap<>();
 
     public JetStreamSourceEnumerator(
             Properties connectProps,
@@ -112,23 +100,33 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
     }
 
     private void addToPendingSplits(Collection<JetStreamConsumerSplit> fetchedConsumers) {
-        fetchedConsumers.stream()
-                .sorted(Comparator.comparing(JetStreamConsumerSplit::getName))
-                .forEachOrdered(c -> pendingSplitAssignments.put(pendingSplitAssignments.size() + 1, c));
+        for (JetStreamConsumerSplit split : fetchedConsumers) {
+            int id = Math.floorMod(split.splitId().hashCode(), context.currentParallelism());
+            pendingSplitAssignments.computeIfAbsent(id, k -> new HashSet<>()).add(split);
+        }
     }
 
+    // Same as KafkaSourceEnumerator#assignPendingPartitionSplits
     private void assignPendingSplits(Set<Integer> readers) {
+        Map<Integer, List<JetStreamConsumerSplit>> incrementalAssignments =
+            new HashMap<>(pendingSplitAssignments.size());
+
         for (int readerId : readers) {
             checkReaderRegistered(readerId);
-            JetStreamConsumerSplit split = pendingSplitAssignments.remove(readerId);
-            if (split != null) {
-                LOG.info("Assigning split {} to reader {}", split.splitId(), readerId);
-                System.out.printf("Assigning split %s to reader %d%n", split.splitId(), readerId);
-                context.assignSplit(split, readerId);
-                assignedSplits.add(split);
-                // A reader will be assigned a single static split assignment
-                 context.signalNoMoreSplits(readerId);
+            Set<JetStreamConsumerSplit> splits = pendingSplitAssignments.remove(readerId);
+            if (splits != null) {
+                LOG.info("Reader {} will be assigned splits: {}", readerId,
+                    splits.stream().map(JetStreamConsumerSplit::splitId).collect(Collectors.toList())
+                );
+                System.out.printf("Reader %d will be assigned splits: %s", readerId,
+                    splits.stream().map(JetStreamConsumerSplit::splitId).collect(Collectors.toList())
+                );
+                incrementalAssignments.computeIfAbsent(readerId, k -> new ArrayList<>()).addAll(splits);
+                assignedSplits.addAll(splits);
             }
+        }
+        if (!incrementalAssignments.isEmpty()) {
+            context.assignSplits(new SplitsAssignment<>(incrementalAssignments));
         }
     }
 

@@ -31,10 +31,13 @@ public class JetStreamSourceEnumStateSerializer implements SimpleVersionedSerial
                 JetStreamConsumerSplitSerializer.write(split, out);
             }
 
-            out.writeInt(obj.getPendingSplitAssignments().size());
-            for (Map.Entry<Integer, JetStreamConsumerSplit> entry : obj.getPendingSplitAssignments().entrySet()) {
+            out.writeInt(obj.getPendingAssignments().size());
+            for (Map.Entry<Integer, Set<JetStreamConsumerSplit>> entry : obj.getPendingAssignments().entrySet()) {
                 out.writeInt(entry.getKey());
-                JetStreamConsumerSplitSerializer.write(entry.getValue(), out);
+                out.writeInt(entry.getValue().size());
+                for (JetStreamConsumerSplit split : entry.getValue()) {
+                    JetStreamConsumerSplitSerializer.write(split, out);
+                }
             }
             out.flush();
             return baos.toByteArray();
@@ -53,11 +56,15 @@ public class JetStreamSourceEnumStateSerializer implements SimpleVersionedSerial
             }
 
             int pendingSize = in.readInt();
-            Map<Integer, JetStreamConsumerSplit> pending = new HashMap<>(pendingSize);
+            Map<Integer, Set<JetStreamConsumerSplit>> pending = new HashMap<>(pendingSize);
             for (int i = 0; i < pendingSize; i++) {
                 int k = in.readInt();
-                JetStreamConsumerSplit v = JetStreamConsumerSplitSerializer.read(in);
-                pending.put(k, v);
+                int size = in.readInt();
+                HashSet<JetStreamConsumerSplit> splits = new HashSet<>(size);
+                for (int j = 0; j < size; j++) {
+                    splits.add(JetStreamConsumerSplitSerializer.read(in));
+                }
+                pending.put(k, splits);
             }
             return new JetStreamSourceEnumState(assigned, pending);
         }
