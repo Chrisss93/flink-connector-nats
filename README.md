@@ -20,17 +20,18 @@ When the connector is configured with multiple explicit consumers rather than a 
 import com.github.chrisss93.connector.nats.source.JetStreamSource;
 import com.github.chrisss93.connector.nats.source.reader.deserializer.StringDeserializer;
 
-JetStreamSource<String> source=JetStreamSource.<String>builder()
-        .setServerURL("nats://...")
-        .setStream("foo")
-        .setDefaultConsumerConfiguration("my-flink-job")
-        .setDeserializationSchema(new StringDeserializer())
-        .build();
+JetStreamSource<String> source = JetStreamSource.<String>builder()
+    .setServerURL("nats://...")
+    .setStream("foo")
+    .setDefaultConsumerConfiguration("my-flink-job")
+    .setDeserializationSchema(new StringDeserializer())
+    .build();
 
-        DataStream<String> myStream=env.fromSource(
-        source,
-        WatermarkStrategy.noWatermarks(),
-        "NATS Source");
+DataStream<String> myStream = env.fromSource(
+    source,
+    WatermarkStrategy.noWatermarks(),
+    "NATS Source"
+);
 ```
 
 ## Sink
@@ -44,17 +45,17 @@ import java.util.Properties;
 
 import static io.nats.client.Options.PROP_URL;
 
-Properties props=new Properties();
-        props.setProperty(Options.PROP_URL,"nats://...");
+Properties props = new Properties();
+props.setProperty(Options.PROP_URL, "nats://...");
 
-        StringSerializer serializer=(element)->"bar";
+StringSerializer serializer = (element) -> "bar";
 
-        DataStream<Integer> ds;
+DataStream<Integer> ds;
 
-        ds
-        .map(String::valueOf)
-        .sinkTo(new JetStreamSink(props,serializer))
-        .uid("NATS Sink")
+ds
+    .map(String::valueOf)
+    .sinkTo(new JetStreamSink(props, serializer))
+    .uid("NATS Sink")
 ```
 
 The example above will try to send data to the subject: `bar`. If the NATS server doesn't have any stream capturing that subject in its subject-filter (or any active consumers on that subject), the messages will be rejected and the job will fail.

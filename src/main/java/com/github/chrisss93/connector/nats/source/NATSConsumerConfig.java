@@ -6,6 +6,7 @@ import io.nats.client.api.DeliverPolicy;
 import io.nats.client.api.ReplayPolicy;
 import io.nats.client.support.JsonParser;
 import io.nats.client.support.JsonValue;
+import org.apache.flink.annotation.VisibleForTesting;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -19,7 +20,7 @@ import static io.nats.client.support.JsonValueUtils.*;
  *     A serializable version of java-nats {@link ConsumerConfiguration.Builder}
  */
 public class NATSConsumerConfig extends ConsumerConfiguration.Builder implements Serializable {
-    protected NATSConsumerConfig(ConsumerConfiguration cc) {
+    public NATSConsumerConfig(ConsumerConfiguration cc) {
         super(cc);
     }
 

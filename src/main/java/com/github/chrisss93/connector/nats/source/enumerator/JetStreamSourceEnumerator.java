@@ -19,6 +19,10 @@ import java.util.stream.Stream;
 
 import static org.apache.pulsar.shade.org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 
+/**
+ * Given a parallelism and number of splits, this enumerator assigns splits evenly across readers with no special
+ * affinity between a particular split and a particular reader.
+ */
 public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsumerSplit, JetStreamSourceEnumState> {
     private static final Logger LOG = LoggerFactory.getLogger(JetStreamSourceEnumerator.class);
     private final Options connectOpts;
@@ -55,7 +59,8 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
 
     @Override
     public void addSplitsBack(List<JetStreamConsumerSplit> splits, int subtaskId) {
-        addToPendingSplits(splits);
+        splits.forEach(assignedSplits::remove);
+        preparePendingSplits(splits);
         // If the failed subtask has already restarted, we need to assign pending splits to it
         if (context.registeredReaders().containsKey(subtaskId)) {
             assignPendingSplits(Collections.singleton(subtaskId));
@@ -64,7 +69,6 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
 
     @Override
     public void addReader(int subtaskId) {
-        LOG.debug("Adding reader {} to JetStreamSourceEnumerator for stream {}.", subtaskId, streamName);
         assignPendingSplits(Collections.singleton(subtaskId));
     }
 
@@ -91,18 +95,18 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
         return configs.map(c -> new JetStreamConsumerSplit(streamName, c.build())).collect(Collectors.toList());
     }
 
-    private void assignAllSplits(Collection<JetStreamConsumerSplit> configs, Throwable throwable) {
+    private void assignAllSplits(List<JetStreamConsumerSplit> configs, Throwable throwable) {
         if (throwable != null) {
             throw new FlinkRuntimeException("Failed to fetch or prepare all configured NATS consumers ", throwable);
         }
-        addToPendingSplits(configs);
+        preparePendingSplits(configs);
         assignPendingSplits(context.registeredReaders().keySet());
     }
 
-    private void addToPendingSplits(Collection<JetStreamConsumerSplit> fetchedConsumers) {
-        for (JetStreamConsumerSplit split : fetchedConsumers) {
-            int id = Math.floorMod(split.splitId().hashCode(), context.currentParallelism());
-            pendingSplitAssignments.computeIfAbsent(id, k -> new HashSet<>()).add(split);
+    private void preparePendingSplits(List<JetStreamConsumerSplit> fetchedConsumers) {
+        for (int i = 0; i < fetchedConsumers.size(); i++) {
+            int readerId = (assignedSplits.size() + i + 1) % context.currentParallelism();
+            pendingSplitAssignments.computeIfAbsent(readerId, k -> new HashSet<>()).add(fetchedConsumers.get(i));
         }
     }
 
