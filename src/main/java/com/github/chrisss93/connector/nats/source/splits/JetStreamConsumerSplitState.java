@@ -2,10 +2,11 @@ package com.github.chrisss93.connector.nats.source.splits;
 
 import io.nats.client.Message;
 import io.nats.client.api.ConsumerConfiguration;
+import io.nats.client.api.DeliverPolicy;
 
 public interface JetStreamConsumerSplitState {
     void addPendingAck(Message msg);
-    void setStartSequence(long i);
+    void updateStreamSequence(long i);
     JetStreamConsumerSplit toSplit();
 }
 
@@ -19,7 +20,7 @@ abstract class JetStreamConsumerSplitStateImpl implements JetStreamConsumerSplit
     }
 
     @Override
-    public void setStartSequence(long i) {
+    public void updateStreamSequence(long i) {
         this.config.startSequence(i);
     }
 

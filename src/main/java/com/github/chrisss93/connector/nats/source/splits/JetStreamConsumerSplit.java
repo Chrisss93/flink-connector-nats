@@ -1,27 +1,26 @@
 package com.github.chrisss93.connector.nats.source.splits;
 
+import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
 import io.nats.client.api.ConsumerConfiguration;
 import org.apache.flink.api.connector.source.SourceSplit;
 
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.io.*;
+import java.util.*;
 
 public class JetStreamConsumerSplit implements SourceSplit {
     private final String stream;
-    private final ConsumerConfiguration.Builder config;
+    private final NATSConsumerConfig config;
     private final Set<String> pendingAcks;
 
     public JetStreamConsumerSplit(String stream, ConsumerConfiguration config, Set<String> pendingAcks) {
         this.stream = stream;
-        this.config = ConsumerConfiguration.builder(config);
+        this.config = new NATSConsumerConfig(config);
         this.pendingAcks = pendingAcks;
     }
 
     public JetStreamConsumerSplit(String stream, ConsumerConfiguration config) {
         this(stream, config, new HashSet<>());
     }
-
 
     @Override
     public String splitId() {
@@ -35,7 +34,6 @@ public class JetStreamConsumerSplit implements SourceSplit {
     public String getStream() {
         return stream;
     }
-
     public ConsumerConfiguration getConfig() {
         return config.build();
     }
@@ -95,5 +93,25 @@ public class JetStreamConsumerSplit implements SourceSplit {
             myConfig.getNumReplicas() == otherConfig.getNumReplicas() &&
             myConfig.getRateLimit() == otherConfig.getRateLimit()
             ;
+    }
+
+    public static void write(JetStreamConsumerSplit split, ObjectOutputStream out) throws IOException {
+        out.writeUTF(split.getStream());
+        out.writeObject(split.config);
+        out.writeInt(split.getPendingAcks().size());
+        for (String ack : split.getPendingAcks()) {
+            out.writeUTF(ack);
+        }
+    }
+
+    public static JetStreamConsumerSplit read(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        String stream = in.readUTF();
+        NATSConsumerConfig config = (NATSConsumerConfig) in.readObject();
+        int ackCount = in.readInt();
+        Set<String> acks = new HashSet<>(ackCount);
+        for (int i = 0; i < ackCount; i++) {
+            acks.add(in.readUTF());
+        }
+        return new JetStreamConsumerSplit(stream, config.build(), acks);
     }
 }

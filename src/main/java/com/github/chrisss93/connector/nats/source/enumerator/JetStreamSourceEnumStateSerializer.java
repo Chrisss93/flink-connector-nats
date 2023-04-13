@@ -3,11 +3,12 @@ package com.github.chrisss93.connector.nats.source.enumerator;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplitSerializer;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.flink.util.FlinkRuntimeException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -23,12 +24,12 @@ public class JetStreamSourceEnumStateSerializer implements SimpleVersionedSerial
 
     @Override
     public byte[] serialize(JetStreamSourceEnumState obj) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream out = new DataOutputStream(baos)) {
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(bytes)) {
 
             out.writeInt(obj.getAssignedSplits().size());
             for (JetStreamConsumerSplit split : obj.getAssignedSplits()) {
-                JetStreamConsumerSplitSerializer.write(split, out);
+                JetStreamConsumerSplit.write(split, out);
             }
 
             out.writeInt(obj.getPendingAssignments().size());
@@ -36,23 +37,27 @@ public class JetStreamSourceEnumStateSerializer implements SimpleVersionedSerial
                 out.writeInt(entry.getKey());
                 out.writeInt(entry.getValue().size());
                 for (JetStreamConsumerSplit split : entry.getValue()) {
-                    JetStreamConsumerSplitSerializer.write(split, out);
+                    JetStreamConsumerSplit.write(split, out);
                 }
             }
             out.flush();
-            return baos.toByteArray();
+            return bytes.toByteArray();
         }
     }
 
     @Override
     public JetStreamSourceEnumState deserialize(int version, byte[] serialized) throws IOException {
-        try (ByteArrayInputStream bais = new ByteArrayInputStream(serialized);
-             DataInputStream in = new DataInputStream(bais)) {
+        try (ByteArrayInputStream bytes = new ByteArrayInputStream(serialized);
+             ObjectInputStream in = new ObjectInputStream(bytes)) {
 
             int assignedSize = in.readInt();
             Set<JetStreamConsumerSplit> assigned = new HashSet<>(assignedSize);
             for (int i = 0; i < assignedSize; i++) {
-                assigned.add(JetStreamConsumerSplitSerializer.read(in));
+                try {
+                    assigned.add(JetStreamConsumerSplit.read(in));
+                } catch (ClassNotFoundException e) {
+                    throw new FlinkRuntimeException(e);
+                }
             }
 
             int pendingSize = in.readInt();
@@ -62,7 +67,11 @@ public class JetStreamSourceEnumStateSerializer implements SimpleVersionedSerial
                 int size = in.readInt();
                 HashSet<JetStreamConsumerSplit> splits = new HashSet<>(size);
                 for (int j = 0; j < size; j++) {
-                    splits.add(JetStreamConsumerSplitSerializer.read(in));
+                    try {
+                        splits.add(JetStreamConsumerSplit.read(in));
+                    } catch (ClassNotFoundException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
                 pending.put(k, splits);
             }
