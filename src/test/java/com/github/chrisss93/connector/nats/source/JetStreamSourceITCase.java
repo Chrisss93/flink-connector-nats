@@ -8,12 +8,15 @@ import com.github.chrisss93.connector.nats.testutils.source.cases.MultiFilterStr
 import com.github.chrisss93.connector.nats.testutils.source.cases.MultiThreadedFetcherContext;
 import com.github.chrisss93.connector.nats.testutils.source.cases.SingleFilterStreamContext;
 import org.apache.flink.connector.testframe.environment.MiniClusterTestEnvironment;
+import org.apache.flink.connector.testframe.environment.TestEnvironment;
+import org.apache.flink.connector.testframe.external.source.DataStreamSourceExternalContext;
 import org.apache.flink.connector.testframe.junit.annotations.TestContext;
 import org.apache.flink.connector.testframe.junit.annotations.TestEnv;
 import org.apache.flink.connector.testframe.junit.annotations.TestExternalSystem;
 import org.apache.flink.connector.testframe.junit.annotations.TestSemantics;
 import org.apache.flink.connector.testframe.testsuites.SourceTestSuiteBase;
 import org.apache.flink.streaming.api.CheckpointingMode;
+import org.junit.jupiter.api.Disabled;
 
 import static org.apache.flink.streaming.api.CheckpointingMode.EXACTLY_ONCE;
 
@@ -49,4 +52,12 @@ public class JetStreamSourceITCase extends SourceTestSuiteBase<String> {
     @TestContext
     NatsTestContextFactory<JetStreamSourceContext> multiThreadedFetcher =
         new NatsTestContextFactory<>(natsEnv, (env, testName) -> new MultiThreadedFetcherContext(env, testName, 2));
+
+    @Disabled("enable once telemetry is implemented")
+    @Override
+    public void testSourceMetrics(
+        TestEnvironment testEnv,
+        DataStreamSourceExternalContext<String> externalContext,
+        CheckpointingMode semantic) {
+    }
 }
