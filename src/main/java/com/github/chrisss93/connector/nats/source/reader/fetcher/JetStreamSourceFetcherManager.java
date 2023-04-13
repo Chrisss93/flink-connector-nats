@@ -3,15 +3,19 @@ package com.github.chrisss93.connector.nats.source.reader.fetcher;
 
 import com.github.chrisss93.connector.nats.source.reader.JetStreamSplitReader;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
+import com.github.chrisss93.connector.nats.source.splits.SplitsRemoval;
 import io.nats.client.Message;
+import org.apache.flink.connector.base.source.reader.RecordsBySplits;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcher;
 import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcherManager;
+import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcherTask;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.function.Supplier;
 
@@ -26,11 +30,6 @@ public class JetStreamSourceFetcherManager extends SplitFetcherManager<Message, 
             Supplier<SplitReader<Message, JetStreamConsumerSplit>> splitReaderSupplier) {
         super(elementsQueue, splitReaderSupplier);
         this.numFetchers = numFetchers;
-
-        // Start fetchers. It's okay if they immediately go idle.
-        for (int i = 0; i < numFetchers; i++) {
-            createSplitFetcher();
-        }
     }
 
     @Override
@@ -53,8 +52,6 @@ public class JetStreamSourceFetcherManager extends SplitFetcherManager<Message, 
         }
         for (Map.Entry<String, Set<String>> e : acksToCommit.entrySet() ) {
             LOG.debug("Sending acks for {} messages back to {}.", e.getValue().size(), e.getKey());
-            System.out.printf("Sending acks for %d messages back to %s.%n", e.getValue().size(), e.getKey());
-
             SplitFetcher<Message, JetStreamConsumerSplit> splitFetcher = getOrCreateFetcher(e.getKey());
 
             // TODO: Figure out why I can't get the fetcher to handle this task asynchronously as it's done in the kafka connector?
@@ -82,6 +79,20 @@ public class JetStreamSourceFetcherManager extends SplitFetcherManager<Message, 
     }
      */
 
+    public void signalCloseAllFetchers() {
+        fetchers.forEach( (id, fetcher) -> {
+            fetcher.enqueueTask(new SplitFetcherTask() {
+                @Override
+                public boolean run() {
+                    fetcher.getSplitReader().handleSplitsChanges(new SplitsRemoval<>());
+                    return true;
+                }
+                @Override
+                public void wakeUp() {
+                }
+            });
+        });
+    }
 
     private SplitFetcher<Message, JetStreamConsumerSplit> getOrCreateFetcher(String splitId) {
         int fetcherId = Math.floorMod(splitId.hashCode(), numFetchers);

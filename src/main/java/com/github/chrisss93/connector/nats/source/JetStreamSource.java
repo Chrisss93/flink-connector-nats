@@ -91,15 +91,29 @@ public class JetStreamSource<OUT>
     @Override
     public SplitEnumerator<JetStreamConsumerSplit, JetStreamSourceEnumState> createEnumerator(
             SplitEnumeratorContext<JetStreamConsumerSplit> enumContext) {
-        return new JetStreamSourceEnumerator(connectProps, stream, consumerConfigs, dynamicConsumers, enumContext);
+        return new JetStreamSourceEnumerator(
+            connectProps,
+            stream,
+            consumerConfigs,
+            dynamicConsumers,
+            getBoundedness(),
+            enumContext
+        );
     }
 
     @Override
     public SplitEnumerator<JetStreamConsumerSplit, JetStreamSourceEnumState> restoreEnumerator(
             SplitEnumeratorContext<JetStreamConsumerSplit> enumContext,
             JetStreamSourceEnumState checkpoint) {
-
-        return new JetStreamSourceEnumerator(connectProps, stream, consumerConfigs, dynamicConsumers, enumContext);
+        return new JetStreamSourceEnumerator(
+            connectProps,
+            stream,
+            consumerConfigs,
+            dynamicConsumers,
+            getBoundedness(),
+            enumContext,
+            checkpoint
+        );
     }
 
     @Override

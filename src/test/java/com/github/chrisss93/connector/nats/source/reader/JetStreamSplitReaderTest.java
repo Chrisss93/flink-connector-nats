@@ -19,8 +19,9 @@ import static java.util.Collections.singletonList;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
-    private static final String streamName = JetStreamConsumerSplitReaderTest.class.getSimpleName();
+public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
+    private static final String streamName = JetStreamSplitReaderTest.class.getSimpleName();
+    private static final int NUM_MESSAGES = 3;
 
     @BeforeAll
     void makeStream() throws Exception {
@@ -35,7 +36,7 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
     @Test
     void pollMessageAfterTimeout(TestInfo test) {
         String consumerName = sanitizeDisplay(test);
-        JetStreamConsumerSplitReader splitReader = jetStreamConsumer(new NeverStop());
+        JetStreamSplitReader splitReader = jetStreamConsumer(new NeverStop());
 
         // Tell reader to create NATS consumer and fetch records from an empty stream
         addSplit(splitReader, consumerName);
@@ -55,7 +56,7 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
     @Test
     void wakeupUnblocksFetchWithoutException(TestInfo test) throws InterruptedException {
         String consumerName = sanitizeDisplay(test);
-        JetStreamConsumerSplitReader splitReader = jetStreamConsumer(new NeverStop());
+        JetStreamSplitReader splitReader = jetStreamConsumer(new NeverStop());
         addSplit(splitReader, consumerName);
 
         client().publish(String.format("%s.%s.%d", streamName, consumerName, 0), new byte[]{1});
@@ -63,7 +64,7 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
         long wakeupAfterMs = 100L;
         long cushion = 100L;
         AtomicReference<Throwable> error = new AtomicReference<>();
-        // Define a blocking fetch call in a different threaad.
+        // Define a blocking fetch call in a different thread.
         Thread t =
             new Thread(
                 () -> {
@@ -86,7 +87,7 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
         splitReader.wakeUp();
 
         assertThat(error.get()).isNull();
-        client().publish(String.format("%s.%s.%d", streamName, consumerName, 0), new byte[]{1});
+        client().publish(String.format("%s.%s.%d", streamName, consumerName, 1), new byte[]{1});
         // Fetch records again after being woken up.
         List<Message> messages = fetchMessages(splitReader);
         assertThat(messages).hasSize(1);
@@ -94,9 +95,8 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
 
     @Test
     void finishedSplitByLatestStop(TestInfo test) {
-        int NUM_MESSAGES = 3;
         String consumerName = sanitizeDisplay(test);
-        JetStreamConsumerSplitReader splitReader = jetStreamConsumer(new LatestStop());
+        JetStreamSplitReader splitReader = jetStreamConsumer(new LatestStop());
 
         byte i;
         for (i = 0; i < NUM_MESSAGES; i++) {
@@ -116,7 +116,6 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
 
     @Test
     void finishedSplitByTimestampStop(TestInfo test) throws Exception {
-        int NUM_MESSAGES = 3;
         String consumerName = sanitizeDisplay(test);
 
         byte i;
@@ -125,7 +124,7 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
         }
 
         client().flush(Duration.ofSeconds(1));
-        JetStreamConsumerSplitReader splitReader = jetStreamConsumer(new TimestampStop(System.currentTimeMillis()));
+        JetStreamSplitReader splitReader = jetStreamConsumer(new TimestampStop(System.currentTimeMillis()));
         Thread.sleep(200);
 
         for (; i < NUM_MESSAGES * 2; i++) {
@@ -134,7 +133,7 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
         JetStreamConsumerSplit split = addSplit(splitReader, consumerName);
 
         List<Message> messages = fetchMessages(splitReader, Collections.singleton(split.splitId()));
-        assertThat(messages).hasSize(3);
+        assertThat(messages).hasSize(NUM_MESSAGES + 1);
 
         for (byte b = 0; b < messages.size(); b++) {
             assertThat(messages.get(b).getData()).isEqualTo(new byte[]{b});
@@ -144,19 +143,18 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
 
     @Test
     void finishedSplitByStreamSequenceStop(TestInfo test) throws Exception {
-        int NUM_MESSAGES = 3;
         String consumerName = sanitizeDisplay(test);
         createStream(consumerName, consumerName + ".>");
-        JetStreamConsumerSplitReader splitReader = jetStreamConsumer(new StreamSequenceStop(3));
+        JetStreamSplitReader splitReader = jetStreamConsumer(new StreamSequenceStop(NUM_MESSAGES));
 
-        for (byte i = 0; i < NUM_MESSAGES * 3; i++) {
+        for (byte i = 0; i < NUM_MESSAGES * NUM_MESSAGES; i++) {
             client().publish(String.format("%s.%s.%d", consumerName, consumerName, i), new byte[]{i});
         }
         JetStreamConsumerSplit split = addSplit(splitReader, consumerName, consumerName);
 
         List<Message> messages = fetchMessages(splitReader, Collections.singleton(split.splitId()));
         deleteStream(consumerName);
-        assertThat(messages).hasSize(3);
+        assertThat(messages).hasSize(NUM_MESSAGES);
 
         for (byte b = 0; b < messages.size(); b++) {
             assertThat(messages.get(b).getData()).isEqualTo(new byte[]{b});
@@ -165,9 +163,8 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
 
     @Test
     void pauseAndResumeSplit(TestInfo test) {
-        int NUM_MESSAGES = 3;
         String consumerName = sanitizeDisplay(test);
-        JetStreamConsumerSplitReader splitReader = jetStreamConsumer(new NeverStop());
+        JetStreamSplitReader splitReader = jetStreamConsumer(new NeverStop());
         JetStreamConsumerSplit split = addSplit(splitReader, consumerName);
 
         // Pause the split
@@ -186,17 +183,17 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
         assertThat(fetchMessages(splitReader)).hasSize(NUM_MESSAGES * 2);
     }
 
-    private JetStreamConsumerSplitReader jetStreamConsumer(StopRule stopRule) {
-        return new JetStreamConsumerSplitReader(
+    private JetStreamSplitReader jetStreamConsumer(StopRule stopRule) {
+        return new JetStreamSplitReader(
             Options.builder().server(client().getConnectedUrl()).build(),
             stopRule
         );
     }
 
-    private JetStreamConsumerSplit addSplit(JetStreamConsumerSplitReader reader, String consumerName) {
+    private JetStreamConsumerSplit addSplit(JetStreamSplitReader reader, String consumerName) {
         return addSplit(reader, streamName, consumerName);
     }
-    private JetStreamConsumerSplit addSplit(JetStreamConsumerSplitReader reader, String stream, String consumerName) {
+    private JetStreamConsumerSplit addSplit(JetStreamSplitReader reader, String stream, String consumerName) {
         ConsumerConfiguration conf = ConsumerConfiguration.builder()
             .durable(consumerName)
             .name(consumerName)
@@ -209,10 +206,10 @@ public class JetStreamConsumerSplitReaderTest extends NatsTestSuiteBase {
         return split;
     }
 
-    private List<Message> fetchMessages(JetStreamConsumerSplitReader reader) {
+    private List<Message> fetchMessages(JetStreamSplitReader reader) {
         return fetchMessages(reader, new HashSet<>());
     }
-    private List<Message> fetchMessages(JetStreamConsumerSplitReader reader, Set<String> expectedFinished) {
+    private List<Message> fetchMessages(JetStreamSplitReader reader, Set<String> expectedFinished) {
         List<Message> messages = new ArrayList<>();
         Set<String> finishedSplits = new HashSet<>();
 

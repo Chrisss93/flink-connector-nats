@@ -34,6 +34,17 @@ DataStream<String> myStream = env.fromSource(
 );
 ```
 
+### Bounded mode
+
+The user may specify a simple rule by which the connector will stop consuming a NATS stream after some condition specified in the `connector.nats.source.enumerator.offsets.StopRule` interface. This sets the connector to Bounded-mode. **These stopping-rules are scoped to the entire NATS stream, not the source splits (NATS consumers)**. So in the situation where the connector is consuming a NATS stream via multiple splits, the first split which reaches the stopping rule will trigger all other splits to gracefully stop consuming from their respective NATS consumers. When there is greater parallelism than splits, the following steps are taken to achieve this:
+
+1. The `SourceReader` for the stopping split sends a custom `org.apache.flink.api.connector.source.SourceEvent` to the `SplitEnumerator` (source coordinator)
+2. The enumerator broadcasts that same source-event to the other source-readers.
+3. The other source-readers receive the source-event and use their `SplitFetcherManager` to send a special `org.apache.flink.connector.base.source.reader.splitreader.SplitChanges` to the source-readers' fetchers (`SplitReader`). This instructs the split-reader to mark all its splits as finished on the next fetch call.
+
+The motivation behind this extra communication between source components is to ensure that an idle split does not keep a bounded source open for longer than is necessary. Since the stopping-rule is globally scoped, this short-circuits the other splits to close immediately instead of staying running in the case where their NATS consumers are not sending new messages.
+
+
 ## Sink
 
 ### Usage
@@ -68,12 +79,16 @@ The example above will try to send data to the subject: `bar`. If the NATS serve
 * Telemetry
 * ~~Source unit-tests~~
 * ~~Sink unit-tests~~
-* E2E testing
+* Table API?
+* ~~E2E testing~~ (still need to do Sinks)
+* Implement ContainerRuntime for unit-tests to avoid external binary dependency
 * Publishing artifacts (against multiple Flink versions)
 * ~~Simplify `JetStreamConsumerSplit` to just be the pending acks, stream name and consumer name. No need to carry the entire un-serializable NATS ConsumerInfo~~
-* Somehow test that the connector does not rely on NATS for fault tolerance. Instead, handle progress recovery seamlessly as Kafka/Pulsar connectors do through checkpoints by default.
+* ~~Somehow test that the connector does not rely on NATS for fault tolerance. Instead, handle progress recovery seamlessly as Kafka/Pulsar connectors do through checkpoints by default.~~
 * ~~When library compiles against Flink 1.17+, implement the additional method from FLIP-217 for split watermark alignment. This is of particular importance to this connector because there are even fewer guarantees than with Kafka that the split-readers (NATS consumers) will be receiving data evenly from the underlying stream.~~
 * Potentially remove support for NATS Ack-All and only support a cumulative acknowledgement model. This would allow us to remove an abstraction and simplify the checkpointing code a bit. This would probably mean we can remove the single vs. double ack code-path as well (should really be using double-ack at all times).
 * Allow the split-reader to receive messages from NATS using a Dispatcher instead of one or more pull-subscriptions. The problem here is that the jnats dispatcher construct was designed for push-subscriptions, not pull-subscriptions. So we might need to implement a lot of custom code for this.
 * NATS streams (and their splits under this connector) are much more mutable than Kafka topic-partitions. Test to see what happens if the underlying NATS stream changes its subject-filters? If the subject-space is now smaller and some of our split-readers have been initiated with NATS consumers whose subject-filter that is now wider than its stream subject-filter, does the client throw/warn? Or do we need to monitor this to be able to clean up resources for these newly dead splits?
   * Furthermore, if the source connector is configured to dynamically create splits based on the subject filters in the stream and new subject-filters are simply *added* to the stream, should we do the dynamic-split discovery like kafka/pulsar and assign a new split?
+* Subject-filter is not a "natural" partitioning for a NATS stream. There are no guarantees of even distribution of stream data across subjects. In this case it should not be unexpected for one single split to produce more data than another. Split skewness is (in general) not real for these sorts of splits. We should probably turn off split-aware watermark generation or make it the configurable default and go back to global source watermarks (ReaderOutput). This is difficult with the current implementation since it extends `SourceReaderBase`. I really don't want to have to reimplement most of that class but for one small change...
+* BUG: LastAck mode doesn't seem to clear old successful acks from the last checkpoint.

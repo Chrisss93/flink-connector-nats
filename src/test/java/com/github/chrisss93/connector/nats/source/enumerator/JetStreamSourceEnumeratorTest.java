@@ -5,6 +5,7 @@ import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import com.github.chrisss93.connector.nats.testutils.NatsTestSuiteBase;
 import io.nats.client.Options;
 import io.nats.client.api.ConsumerConfiguration;
+import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.ReaderInfo;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
@@ -159,7 +160,14 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
             s -> new NATSConsumerConfig(new ConsumerConfiguration.Builder().name(s).build())
         ).collect(Collectors.toSet());
 
-        return new JetStreamSourceEnumerator(props, streamName, configs, dynamicConsumer, context);
+        return new JetStreamSourceEnumerator(
+            props,
+            streamName,
+            configs,
+            dynamicConsumer,
+            Boundedness.CONTINUOUS_UNBOUNDED,
+            context
+        );
     }
 
     private void registerReader(

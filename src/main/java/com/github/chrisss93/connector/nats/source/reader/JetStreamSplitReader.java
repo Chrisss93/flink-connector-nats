@@ -2,6 +2,7 @@ package com.github.chrisss93.connector.nats.source.reader;
 
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.StopRule;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
+import com.github.chrisss93.connector.nats.source.splits.SplitsRemoval;
 import io.nats.client.*;
 import io.nats.client.api.ConsumerInfo;
 import io.nats.client.impl.AckType;
@@ -28,8 +29,9 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
     private final StopRule stopRule;
     private final Map<String, JetStreamSubscription> subscriptions = new ConcurrentHashMap<>();
     private final Map<String, StopRule> stopRules = new HashMap<>();
+    private boolean shutdown = false;
 
-    private static final int BATCH_SIZE = 256;
+    private static final int BATCH_SIZE = 5000;
     private static final long TIMEOUT_MS = 10000L;
 
     public JetStreamSplitReader(Options connectOptions, StopRule stopRule) {
@@ -49,19 +51,24 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
     public RecordsWithSplitIds<Message> fetch() {
         RecordsBySplits.Builder<Message> recordsWithSplits = new RecordsBySplits.Builder<>();
 
+        if (shutdown) {
+            recordsWithSplits.addFinishedSplits(subscriptions.keySet());
+            return recordsWithSplits.build();
+        }
+
         subscriptions.forEach( (splitId, subscription) -> {
-            if (subscription != null && subscription.isActive()) {
+            if (subscription.isActive()) {
                 int i = 0;
                 try {
                     Iterator<Message> messages = subscription.iterate(BATCH_SIZE, TIMEOUT_MS);
                     while (messages.hasNext()) {
                         Message message = messages.next();
+                        i++;
+                        recordsWithSplits.add(splitId, message);
                         if (stopRules.get(splitId).shouldStop(message)) {
-                            recordsWithSplits.addFinishedSplit(splitId);
+                            recordsWithSplits.addFinishedSplits(subscriptions.keySet());
                             break;
                         }
-                        recordsWithSplits.add(splitId, message);
-                        i++;
                     }
                 } catch (IllegalStateException e) {
                     LOG.info("Split reader for {} has been paused.", splitId);
@@ -104,6 +111,10 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                 String.format("The SplitChange type of %s is not supported.", splitsChanges.getClass())
             );
         }
+        if (splitsChanges instanceof SplitsRemoval) {
+            shutdown = true;
+            return;
+        }
 
         splitsChanges.splits().forEach( s -> {
             try {
@@ -122,12 +133,12 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
             if (!subscription.isActive()) {
                 return;
             }
-            LOG.debug("Draining subscription to {} and resubscribing" + splitId);
+            LOG.debug("Draining subscription to {} and resubscribing", splitId);
             System.out.println("Draining subscription to " + splitId + " and resubscribing");
             try {
                 subscription.drain(Duration.ofSeconds(1));
                 ConsumerInfo info = subscription.getConsumerInfo();
-                subscribe(info.getStreamName(), info.getName());
+                subscriptions.put(splitId, subscribe(info.getStreamName(), info.getName()));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new FlinkRuntimeException("Failed to wakeup split-reader for split: " + splitId, e);
@@ -172,9 +183,12 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
     private void createNatsConsumer(JetStreamConsumerSplit split) {
         LOG.info("Creating new NATS consumer {}", split.splitId());
         try {
+            if (jsm.getConsumerNames(split.getStream()).contains(split.getName())) {
+                jsm.deleteConsumer(split.getStream(), split.getName());
+            }
             jsm.addOrUpdateConsumer(split.getStream(), split.getConfig());
         } catch (JetStreamApiException | IOException e) {
-            throw new FlinkRuntimeException("Failed to create NATS consumer for split: " + split.splitId(), e);
+            throw new FlinkRuntimeException("Failed to create/update NATS consumer for split: " + split.splitId(), e);
         }
     }
 

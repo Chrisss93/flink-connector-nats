@@ -1,10 +1,12 @@
 package com.github.chrisss93.connector.nats.source.reader;
 
+import com.github.chrisss93.connector.nats.source.event.CompleteAllSplitsEvent;
 import com.github.chrisss93.connector.nats.source.reader.fetcher.JetStreamSourceFetcherManager;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplitState;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import io.nats.client.Message;
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
@@ -16,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Depending on the NATS consumer configuration, NATS might not have a fixed-sized progress indicator to send to the
@@ -29,8 +32,8 @@ import java.util.*;
  * <strong>Implementing Checkpoint Subsuming for Committing Artifacts</strong>.
  * Our "ready-set" is held by the assigned splits in {@link JetStreamConsumerSplit#getPendingAcks()} and its values are
  * added as references to our "pending-set": `messagesToAck` during checkpointing. On successful completion of a
- * checkpoint, the references in pending-set are acknowledged back to the NATS server and are cleared, which will
- * clear them from the split-state as well.
+ * checkpoint, the references in pending-set are acknowledged back to the NATS server and are removed, which will
+ * remove them from the split-state as well.
  * </p>
  */
 
@@ -40,6 +43,7 @@ public abstract class JetStreamSourceReaderBase<T>
     private static final Logger LOG = LoggerFactory.getLogger(JetStreamSourceReaderBase.class);
     private final SortedMap<Long, Map<String, Set<String>>> messagesToAck;
     private final boolean doubleAck;
+    private boolean closedByAnotherReader = false;
 
     public JetStreamSourceReaderBase(
         FutureCompletingBlockingQueue<RecordsWithSplitIds<Message>> elementsQueue,
@@ -47,6 +51,7 @@ public abstract class JetStreamSourceReaderBase<T>
         RecordEmitter<Message, T, JetStreamConsumerSplitState> recordEmitter,
         boolean doubleAck,
         SourceReaderContext context) {
+
         this(elementsQueue, splitFetcherManager, recordEmitter, doubleAck, context.getConfiguration(), context);
     }
     public JetStreamSourceReaderBase(
@@ -112,7 +117,20 @@ public abstract class JetStreamSourceReaderBase<T>
     @Override
     protected void onSplitFinished(Map<String, JetStreamConsumerSplitState> finishedSplitIds) {
         LOG.info("Completed splits: {}", finishedSplitIds.keySet());
+        System.out.println("Completed splits: " + finishedSplitIds.keySet());
         context.sendSplitRequest();
+        if (!closedByAnotherReader) {
+            context.sendSourceEventToCoordinator(new CompleteAllSplitsEvent());
+        }
+    }
+
+    @Override
+    public void handleSourceEvents(SourceEvent sourceEvent) {
+        if (!(sourceEvent instanceof CompleteAllSplitsEvent)) {
+            throw new UnsupportedOperationException(String.format("source event %s is not supported", sourceEvent));
+        }
+        closedByAnotherReader = true;
+        ((JetStreamSourceFetcherManager) splitFetcherManager).signalCloseAllFetchers();
     }
 
     @VisibleForTesting
@@ -124,5 +142,4 @@ public abstract class JetStreamSourceReaderBase<T>
     int getNumAliveFetchers() {
         return splitFetcherManager.getNumAliveFetchers();
     }
-
 }

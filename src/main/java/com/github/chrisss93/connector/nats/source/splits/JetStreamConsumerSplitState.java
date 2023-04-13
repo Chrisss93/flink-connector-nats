@@ -21,7 +21,8 @@ abstract class JetStreamConsumerSplitStateImpl implements JetStreamConsumerSplit
 
     @Override
     public void updateStreamSequence(long i) {
-        this.config.startSequence(i);
+        this.config.startSequence(i + 1);
+        this.config.deliverPolicy(DeliverPolicy.ByStartSequence);
     }
 
     public String getStream() {

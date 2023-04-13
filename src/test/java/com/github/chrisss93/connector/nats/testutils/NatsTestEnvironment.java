@@ -13,7 +13,7 @@ public class NatsTestEnvironment implements BeforeAllCallback, AfterAllCallback,
     private final NatsServerRuntime runtime;
     private Connection client;
 
-    protected Connection client() {
+    public Connection client() {
         return client;
     }
 

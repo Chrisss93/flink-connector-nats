@@ -23,7 +23,7 @@ public class NatsRecordEmitter<T> implements RecordEmitter<Message, T, JetStream
 
         if (saveAcksInState) {
             splitState.addPendingAck(element);
-            splitState.setStartSequence(element.metaData().streamSequence());
+            splitState.updateStreamSequence(element.metaData().streamSequence());
         }
         output.collect(record, element.metaData().timestamp().toInstant().toEpochMilli());
     }

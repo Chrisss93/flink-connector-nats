@@ -12,6 +12,6 @@ public class TimestampStop implements StopRule {
 
     @Override
     public boolean shouldStop(Message message) {
-        return message.metaData().timestamp().toInstant().toEpochMilli() > stopTime;
+        return message.metaData().timestamp().toInstant().toEpochMilli() >= stopTime;
     }
 }

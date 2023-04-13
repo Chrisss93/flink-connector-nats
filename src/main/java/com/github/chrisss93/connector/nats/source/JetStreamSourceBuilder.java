@@ -184,8 +184,12 @@ public class JetStreamSourceBuilder<T> {
                 builder.ackPolicy(AckPolicy.None);
             } else if (ackEachMessage) {
                 builder.ackPolicy(AckPolicy.Explicit);
+//                builder.maxAckPending(Long.MAX_VALUE - 1);
+                builder.maxAckPending(Integer.MAX_VALUE);
             } else {
                 builder.ackPolicy(AckPolicy.All);
+//                builder.maxAckPending(Long.MAX_VALUE - 1);
+                builder.maxAckPending(Integer.MAX_VALUE);
             }
 
             ConsumerConfiguration config = builder.build();

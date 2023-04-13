@@ -1,12 +1,11 @@
 package com.github.chrisss93.connector.nats.source.enumerator;
 
 import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
+import com.github.chrisss93.connector.nats.source.event.CompleteAllSplitsEvent;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import io.nats.client.*;
 import io.nats.client.api.ConsumerConfiguration;
-import org.apache.flink.api.connector.source.SplitEnumerator;
-import org.apache.flink.api.connector.source.SplitEnumeratorContext;
-import org.apache.flink.api.connector.source.SplitsAssignment;
+import org.apache.flink.api.connector.source.*;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,21 +29,39 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
     private final SplitEnumeratorContext<JetStreamConsumerSplit> context;
     private final Set<NATSConsumerConfig> consumerConfigs;
     private final boolean dynamicConsumers;
+    private final Boundedness boundedness;
 
     private final Set<JetStreamConsumerSplit> assignedSplits = new HashSet<>();
     private final Map<Integer, Set<JetStreamConsumerSplit>> pendingSplitAssignments = new HashMap<>();
+
+    public JetStreamSourceEnumerator(
+        Properties connectProps,
+        String stream,
+        Set<NATSConsumerConfig> consumerConfigs,
+        boolean dynamicConsumers,
+        Boundedness boundedness,
+        SplitEnumeratorContext<JetStreamConsumerSplit> context,
+        JetStreamSourceEnumState restoredState
+        ) {
+
+        this(connectProps, stream, consumerConfigs, dynamicConsumers, boundedness, context);
+        pendingSplitAssignments.putAll(restoredState.getPendingAssignments());
+        assignedSplits.addAll(restoredState.getAssignedSplits());
+    }
 
     public JetStreamSourceEnumerator(
             Properties connectProps,
             String stream,
             Set<NATSConsumerConfig> consumerConfigs,
             boolean dynamicConsumers,
+            Boundedness boundedness,
             SplitEnumeratorContext<JetStreamConsumerSplit> context) {
 
         this.streamName = stream;
         this.connectOpts = new Options.Builder(connectProps).build();
         this.consumerConfigs = consumerConfigs;
         this.dynamicConsumers = dynamicConsumers;
+        this.boundedness = boundedness;
         this.context = context;
 
         if (consumerConfigs.size() < 1) {
@@ -54,7 +71,10 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
 
     @Override
     public void start() {
-        context.callAsync(this::makeOrLookupSplits, this::assignAllSplits);
+        // Lookup fresh split assignments if the enumerator has not been restored from a checkpoint.
+        if (assignedSplits.isEmpty()) {
+            context.callAsync(this::makeOrLookupSplits, this::assignAllSplits);
+        }
     }
 
     @Override
@@ -87,7 +107,7 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
                     .getSubjects()
                     .stream()
                     .map(s -> {
-                        String fullName = prefix + "-" + randomAlphabetic(15);
+                        String fullName = prefix + "-" + randomAlphabetic(5);
                         return config.filterSubject(s).name(fullName).durable(fullName);
                     });
             }
@@ -122,7 +142,7 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
                 LOG.info("Reader {} will be assigned splits: {}", readerId,
                     splits.stream().map(JetStreamConsumerSplit::splitId).collect(Collectors.toList())
                 );
-                System.out.printf("Reader %d will be assigned splits: %s", readerId,
+                System.out.printf("Reader %d will be assigned splits: %s%n", readerId,
                     splits.stream().map(JetStreamConsumerSplit::splitId).collect(Collectors.toList())
                 );
                 incrementalAssignments.computeIfAbsent(readerId, k -> new ArrayList<>()).addAll(splits);
@@ -132,6 +152,9 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
         if (!incrementalAssignments.isEmpty()) {
             context.assignSplits(new SplitsAssignment<>(incrementalAssignments));
         }
+        //if (boundedness == Boundedness.BOUNDED) {
+        readers.forEach(context::signalNoMoreSplits);
+        //}
     }
 
     private void checkReaderRegistered(int readerId) {
@@ -153,4 +176,21 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
 
     @Override
     public void close() throws IOException {}
+
+    @Override
+    public void handleSourceEvent(int subtaskId, SourceEvent sourceEvent) {
+        if (boundedness != Boundedness.BOUNDED) {
+            return;
+        } else if (!(sourceEvent instanceof CompleteAllSplitsEvent)) {
+            throw new UnsupportedOperationException(
+                String.format("source event %s from reader %s is not supported", sourceEvent, subtaskId)
+            );
+        }
+        context.registeredReaders().forEach((k, v) -> {
+            if (k != subtaskId) {
+                LOG.info("Closing reader {} as reader {} has already finished.", k, subtaskId);
+                context.sendEventToSourceReader(k, new CompleteAllSplitsEvent(subtaskId));
+            }
+        });
+    }
 }

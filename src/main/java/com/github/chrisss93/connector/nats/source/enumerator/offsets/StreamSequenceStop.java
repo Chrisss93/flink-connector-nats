@@ -13,6 +13,6 @@ public class StreamSequenceStop implements StopRule {
 
     @Override
     public boolean shouldStop(Message message) {
-        return message.metaData().streamSequence() > stopSequence;
+        return message.metaData().streamSequence() >= stopSequence;
     }
 }
