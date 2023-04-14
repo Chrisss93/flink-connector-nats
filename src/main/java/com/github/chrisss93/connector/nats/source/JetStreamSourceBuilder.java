@@ -34,7 +34,7 @@ public class JetStreamSourceBuilder<T> {
     private boolean dynamicConsumers = false;
     private boolean ackMessageOnCheckpoint = true;
     private boolean ackEachMessage = false;
-    private int numFetcherThreads = 1;
+    private int numFetchersPerReader = 1;
 
     public JetStreamSourceBuilder<T> setServerURL(String address) {
         connectProps.setProperty(Options.PROP_URL, address);
@@ -91,6 +91,7 @@ public class JetStreamSourceBuilder<T> {
     public JetStreamSourceBuilder<T> addConsumerConfiguration(ConsumerConfiguration conf) {
         return addConsumerConfiguration(new ConsumerConfiguration.Builder(conf));
     }
+
     public JetStreamSourceBuilder<T> addConsumerConfiguration(ConsumerConfiguration.Builder builder) {
         consumers.add(builder);
         return this;
@@ -99,9 +100,11 @@ public class JetStreamSourceBuilder<T> {
     public JetStreamSourceBuilder<T> setDefaultConsumerConfiguration(String prefix) {
         return setDefaultConsumerConfiguration(new ConsumerConfiguration.Builder().name(prefix));
     }
+
     public JetStreamSourceBuilder<T> setDefaultConsumerConfiguration(ConsumerConfiguration conf) {
         return setDefaultConsumerConfiguration(new ConsumerConfiguration.Builder(conf));
     }
+
     public JetStreamSourceBuilder<T> setDefaultConsumerConfiguration(ConsumerConfiguration.Builder builder) {
         this.dynamicConsumers = true;
         defaultConsumer = builder;
@@ -118,8 +121,8 @@ public class JetStreamSourceBuilder<T> {
         return this;
     }
 
-    public JetStreamSourceBuilder<T> setNumFetcherThreads(int numFetchers) {
-        this.numFetcherThreads = numFetchers;
+    public JetStreamSourceBuilder<T> setNumFetchersPerReader(int numFetchers) {
+        this.numFetchersPerReader = numFetchers;
         return this;
     }
 
@@ -142,7 +145,7 @@ public class JetStreamSourceBuilder<T> {
 
         checkArgument(deserializationSchema != null, "deserializationSchema must be set.");
         checkArgument(stream != null, "stream must be set.");
-        checkArgument(numFetcherThreads > 0, "numFetcherThreads must be set to a positive value");
+        checkArgument(numFetchersPerReader > 0, "numFetchersPerReader must be set to a positive value");
         validateStreamName(stream, true);
         new Options.Builder(connectProps).build();
 
@@ -155,7 +158,7 @@ public class JetStreamSourceBuilder<T> {
             dynamicConsumers,
             ackMessageOnCheckpoint,
             ackEachMessage,
-            numFetcherThreads
+            numFetchersPerReader
         );
     }
 

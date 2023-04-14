@@ -18,7 +18,7 @@ public class MultiFilterStreamContext extends JetStreamSourceContext {
     }
 
     @Override
-    public Collection<String> subjectFilters() {
+    public Collection<String> streamSubjectFilters() {
         return IntStream.range(0, numSplits).mapToObj(x -> streamName + "." + x).collect(Collectors.toList());
     }
 

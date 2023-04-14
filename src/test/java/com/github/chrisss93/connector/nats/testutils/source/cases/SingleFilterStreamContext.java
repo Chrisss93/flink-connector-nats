@@ -12,7 +12,7 @@ public class SingleFilterStreamContext extends JetStreamSourceContext {
     }
 
     @Override
-    public Collection<String> subjectFilters() {
+    public Collection<String> streamSubjectFilters() {
         return Collections.singleton(streamName);
     }
 

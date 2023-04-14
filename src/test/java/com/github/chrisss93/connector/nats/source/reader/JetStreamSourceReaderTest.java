@@ -329,8 +329,7 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
             .setServerURL(client().getConnectedUrl())
             .setDeserializationSchema(new StringDeserializer())
             .setDefaultConsumerConfiguration("default")
-            .ackEachMessage(ackEach)
-            .setNumFetcherThreads(1);
+            .ackEachMessage(ackEach);
     }
 
 

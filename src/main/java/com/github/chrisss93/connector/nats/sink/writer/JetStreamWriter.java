@@ -61,7 +61,7 @@ public class JetStreamWriter<T> implements SinkWriter<T> {
     public void write(T element, Context context) throws InterruptedException {
         Message msg = serializationSchema.makeMessage(element, context.timestamp());
         while (pendingMessages.get() >= maxPendingMessages) {
-            LOG.info("Too many pending messages");
+            LOG.warn("Too many pending messages to write. Blocking future writes until backlog clears.");
             mailboxExecutor.yield();
         }
         publishWithCallback(msg);
@@ -69,15 +69,17 @@ public class JetStreamWriter<T> implements SinkWriter<T> {
 
     private void publishWithCallback(Message msg) {
         CompletableFuture<PublishAck> future = js.publishAsync(msg);
-        mailboxExecutor.execute(() -> future.handle(
+        mailboxExecutor.execute(() -> future.whenComplete(
             (ack, e) -> {
                 if (e != null) {
-                    throw new FlinkRuntimeException("Failed to send data to NATS at subject: " + msg.getSubject(), e);
+                    LOG.error("JetStream did not acknowledge message publication: {}.", e.getMessage());
+                } else if (ack.isDuplicate()) {
+                    LOG.warn(
+                        "NATS has marked the message at stream {} (#{}) as a duplicate.",
+                        ack.getStream(), ack.getSeqno()
+                    );
                 }
-                if (ack.isDuplicate()) {
-                    LOG.warn("NATS has marked the message at stream-sequence {} as a duplicate.", ack.getSeqno());
-                }
-                return pendingMessages.decrementAndGet();
+                pendingMessages.decrementAndGet();
             }).get(),
             "Async publish handler"
         );
@@ -96,7 +98,6 @@ public class JetStreamWriter<T> implements SinkWriter<T> {
 
         while (pendingMessages.get() > 0) {
             mailboxExecutor.yield();
-//            pendingMessages--;
         }
     }
 

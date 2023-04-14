@@ -80,7 +80,7 @@ The example above will try to send data to the subject: `bar`. If the NATS serve
 * ~~Source unit-tests~~
 * ~~Sink unit-tests~~
 * Table API?
-* ~~E2E testing~~ (still need to do Sinks)
+* ~~E2E testing~~
 * Implement ContainerRuntime for unit-tests to avoid external binary dependency
 * Publishing artifacts (against multiple Flink versions)
 * ~~Simplify `JetStreamConsumerSplit` to just be the pending acks, stream name and consumer name. No need to carry the entire un-serializable NATS ConsumerInfo~~
