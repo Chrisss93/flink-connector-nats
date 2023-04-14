@@ -1,6 +1,7 @@
 package com.github.chrisss93.connector.nats.source.reader;
 
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.StopRule;
+import com.github.chrisss93.connector.nats.source.metrics.JetStreamSourceReaderMetrics;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import com.github.chrisss93.connector.nats.source.splits.SplitsRemoval;
 import io.nats.client.*;
@@ -11,6 +12,7 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
+import org.apache.flink.metrics.groups.SourceReaderMetricGroup;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +29,7 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
     private final Connection connection;
     private final JetStreamManagement jsm;
     private final StopRule stopRule;
+    private final JetStreamSourceReaderMetrics readerMetrics;
     private final Map<String, JetStreamSubscription> subscriptions = new ConcurrentHashMap<>();
     private final Map<String, StopRule> stopRules = new HashMap<>();
     private boolean shutdown = false;
@@ -34,17 +37,18 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
     private static final int BATCH_SIZE = 5000;
     private static final long TIMEOUT_MS = 10000L;
 
-    public JetStreamSplitReader(Options connectOptions, StopRule stopRule) {
+    public JetStreamSplitReader(Options connectOptions, StopRule stopRule, SourceReaderMetricGroup metricGroup) {
         this.stopRule = stopRule;
         try {
             connection = Nats.connect(connectOptions);
-            jsm = connection.jetStreamManagement();//new JetStreamOptions.Builder().requestTimeout(Duration.ofSeconds(30)).build());
+            jsm = connection.jetStreamManagement();
         } catch (IOException e) {
             throw new FlinkRuntimeException("Can't connect to NATS", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new FlinkRuntimeException("Can't connect to NATS", e);
         }
+        this.readerMetrics = new JetStreamSourceReaderMetrics(connection, metricGroup);
     }
 
     @Override
@@ -55,7 +59,6 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
             recordsWithSplits.addFinishedSplits(subscriptions.keySet());
             return recordsWithSplits.build();
         }
-
         subscriptions.forEach( (splitId, subscription) -> {
             if (subscription.isActive()) {
                 int i = 0;
@@ -74,9 +77,10 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                     LOG.info("Split reader for {} has been paused.", splitId);
                 }
                 LOG.debug("Fetched {} new messages from split {}", i, splitId);
-                System.out.printf("Fetched %d new messages from split %s%n", i, splitId);
+//                System.out.printf("Fetched %d new messages from split %s%n", i, splitId);
             }
         });
+        readerMetrics.updateMetrics();
         return recordsWithSplits.build();
     }
 
@@ -84,9 +88,12 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
         for (String r : replyTos) {
             if (!doubleAck) {
                 connection.publish(r, AckType.AckAck.bytes);
+                readerMetrics.updateAcks(true);
             } else {
                 try {
-                    if (connection.request(r, AckType.AckAck.bytes, Duration.ofSeconds(1L)) != null) {
+                    Message reply = connection.request(r, AckType.AckAck.bytes, Duration.ofSeconds(1L));
+                    readerMetrics.updateAcks(reply != null);
+                    if (reply != null) {
                         LOG.warn("NATS did not confirm message acks. Trying again at next checkpoint.");
                     }
                 } catch (InterruptedException e) {
@@ -125,6 +132,8 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
             createNatsConsumer(s);
             subscriptions.put(s.splitId(), subscribe(s.getStream(), s.getName()));
         });
+
+        readerMetrics.updateConsumerCount(subscriptions.size());
     }
 
     @Override

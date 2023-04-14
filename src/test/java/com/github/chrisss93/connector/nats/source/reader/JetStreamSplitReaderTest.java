@@ -8,6 +8,7 @@ import io.nats.client.Options;
 import io.nats.client.api.ConsumerConfiguration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
+import org.apache.flink.connector.testutils.source.reader.TestingReaderContext;
 import org.junit.jupiter.api.*;
 
 import java.time.Duration;
@@ -186,7 +187,8 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
     private JetStreamSplitReader jetStreamConsumer(StopRule stopRule) {
         return new JetStreamSplitReader(
             Options.builder().server(client().getConnectedUrl()).build(),
-            stopRule
+            stopRule,
+            new TestingReaderContext().metricGroup()
         );
     }
 

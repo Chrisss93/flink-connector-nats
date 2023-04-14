@@ -6,6 +6,8 @@ import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import io.nats.client.*;
 import io.nats.client.api.ConsumerConfiguration;
 import org.apache.flink.api.connector.source.*;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.groups.SplitEnumeratorMetricGroup;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +73,11 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
 
     @Override
     public void start() {
+        if (context.metricGroup() != null) { // Can remove null-guard in Flink 1.18 (via FLINK-21000)
+            context.metricGroup().setUnassignedSplitsGauge(() ->
+                pendingSplitAssignments.values().stream().mapToLong(Set::size).sum()
+            );
+        }
         // Lookup fresh split assignments if the enumerator has not been restored from a checkpoint.
         if (assignedSplits.isEmpty()) {
             context.callAsync(this::makeOrLookupSplits, this::assignAllSplits);

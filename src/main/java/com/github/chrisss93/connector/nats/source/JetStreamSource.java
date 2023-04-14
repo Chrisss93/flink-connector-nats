@@ -71,18 +71,22 @@ public class JetStreamSource<OUT>
                 new FutureCompletingBlockingQueue<>();
 
         Supplier<SplitReader<Message, JetStreamConsumerSplit>> splitReaderSupplier =
-            () -> new JetStreamSplitReader(new Options.Builder(connectProps).build(), stopRule);
+            () -> new JetStreamSplitReader(
+                new Options.Builder(connectProps).turnOnAdvancedStats().build(),
+                stopRule,
+                readerContext.metricGroup()
+            );
 
         if (ackEachMessage) {
             return new JetStreamSourceReaderAllAcks<>(
                 elementsQueue,
-                new JetStreamSourceFetcherManager(numFetcherThreads, elementsQueue, splitReaderSupplier::get),
+                new JetStreamSourceFetcherManager(numFetcherThreads, elementsQueue, splitReaderSupplier),
                 new NatsRecordEmitter<>(deserializationSchema, ackMessageOnCheckpoint),
                 readerContext);
         } else {
             return new JetStreamSourceReaderLastAck<>(
                 elementsQueue,
-                new JetStreamSourceFetcherManager(numFetcherThreads, elementsQueue, splitReaderSupplier::get),
+                new JetStreamSourceFetcherManager(numFetcherThreads, elementsQueue, splitReaderSupplier),
                 new NatsRecordEmitter<>(deserializationSchema, ackMessageOnCheckpoint),
                 readerContext);
         }

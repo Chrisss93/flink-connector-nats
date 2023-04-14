@@ -51,12 +51,4 @@ public class JetStreamSinkITCase extends SinkTestSuiteBase<String> {
     @TestContext
     NatsTestContextFactory<JetStreamSinkContext> smallBuffer =
         new NatsTestContextFactory<>(natsEnv, (env, testName) -> new SmallBufferContext(env, testName, 1));
-
-    @Disabled("enable once telemetry is implemented")
-    @Override
-    public void testMetrics(
-        TestEnvironment testEnv,
-        DataStreamSinkExternalContext<String> externalContext,
-        CheckpointingMode semantic) {
-    }
 }
