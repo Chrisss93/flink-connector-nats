@@ -1,0 +1,9 @@
+#
+#Mon Apr 03 18:35:12 MDT 2023
+Return\ and\ argument\ types\ of\ methods\ annotated\ with\ @Public\ must\ be\ annotated\ with\ @Public.=72106a4a-eacd-409a-8048-d994d0b17426
+ITCASE\ tests\ should\ use\ a\ MiniCluster\ resource\ or\ extension=b13f39b4-f5ee-4c54-815f-31d3508992ce
+Production\ code\ must\ not\ call\ methods\ annotated\ with\ @VisibleForTesting=b2a24350-6013-4291-900a-6e8e5d10f807
+Tests\ inheriting\ from\ AbstractTestBase\ should\ have\ name\ ending\ with\ ITCase=bdf7a0a2-5e99-4e05-b7df-746b9f24d0d3
+Options\ for\ connectors\ and\ formats\ should\ reside\ in\ a\ consistent\ package\ and\ be\ public\ API.=76216ed6-a046-43bd-8912-4479881d2ff4
+Return\ and\ argument\ types\ of\ methods\ annotated\ with\ @PublicEvolving\ must\ be\ annotated\ with\ @Public(Evolving).=24779009-dac5-4fc1-b188-9d1827f1cc19
+Classes\ in\ API\ packages\ should\ have\ at\ least\ one\ API\ visibility\ annotation.=c6ae1827-a481-4be8-96f4-a80ea704d443
