@@ -4,14 +4,14 @@ import org.apache.flink.connector.testframe.external.ExternalContext;
 import org.apache.flink.connector.testframe.external.ExternalContextFactory;
 
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 public class NatsTestContextFactory<T extends ExternalContext> implements ExternalContextFactory<T> {
 
     private final NatsTestEnvironment env;
     private final BiFunction<NatsTestEnvironment, String, T> contextFactory;
 
-    public NatsTestContextFactory(NatsTestEnvironment env, BiFunction<NatsTestEnvironment, String, T> contextFactory) {
+    public NatsTestContextFactory(NatsTestEnvironment env,
+                                  BiFunction<NatsTestEnvironment, String, T> contextFactory) {
         this.env = env;
         this.contextFactory = contextFactory;
     }

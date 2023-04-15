@@ -3,6 +3,7 @@ package com.github.chrisss93.connector.nats.testutils;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.api.StreamConfiguration;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import org.apache.flink.connector.testframe.external.ExternalContext;
 
@@ -41,7 +42,7 @@ public abstract class NatsTestContext implements ExternalContext, ResultTypeQuer
 
     @Override
     public TypeInformation<String> getProducedType() {
-        return TypeInformation.of(String.class);
+        return Types.STRING;
     }
 
     @Override

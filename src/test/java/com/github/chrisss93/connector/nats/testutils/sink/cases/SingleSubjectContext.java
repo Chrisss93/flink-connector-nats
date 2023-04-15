@@ -3,7 +3,6 @@ package com.github.chrisss93.connector.nats.testutils.sink.cases;
 import com.github.chrisss93.connector.nats.testutils.NatsTestEnvironment;
 import com.github.chrisss93.connector.nats.testutils.sink.JetStreamSinkContext;
 
-import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
 

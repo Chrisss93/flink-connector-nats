@@ -7,7 +7,10 @@ import io.nats.client.api.ReplayPolicy;
 import io.nats.client.support.JsonParser;
 import io.nats.client.support.JsonValue;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 
 import static io.nats.client.support.ApiConstants.*;
 import static io.nats.client.support.JsonValueUtils.*;

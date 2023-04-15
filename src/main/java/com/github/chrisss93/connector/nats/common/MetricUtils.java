@@ -4,12 +4,6 @@ import io.nats.client.Connection;
 import io.nats.client.api.ServerInfo;
 import org.apache.flink.metrics.MetricGroup;
 
-import java.text.NumberFormat;
-import java.text.ParseException;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 public class MetricUtils {
 
     private static final String SERVER_INFO_GROUP = "serverInfo";

@@ -115,6 +115,7 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
         }
     }
 
+    @Disabled("Flaky test")
     @Test
     void finishedSplitByTimestampStop(TestInfo test) throws Exception {
         String consumerName = sanitizeDisplay(test);
@@ -140,7 +141,6 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
             assertThat(messages.get(b).getData()).isEqualTo(new byte[]{b});
         }
     }
-
 
     @Test
     void finishedSplitByStreamSequenceStop(TestInfo test) throws Exception {

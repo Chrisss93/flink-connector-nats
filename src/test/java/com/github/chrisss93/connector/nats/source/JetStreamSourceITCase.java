@@ -40,8 +40,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static org.apache.flink.connector.testframe.utils.MetricQuerier.getJobDetails;
-import static org.apache.flink.runtime.testutils.CommonTestUtils.*;
+import static org.apache.flink.runtime.testutils.CommonTestUtils.terminateJob;
 import static org.apache.flink.runtime.testutils.CommonTestUtils.waitForJobStatus;
+import static org.apache.flink.runtime.testutils.CommonTestUtils.waitUntilCondition;
 import static org.apache.flink.streaming.api.CheckpointingMode.EXACTLY_ONCE;
 
 public class JetStreamSourceITCase extends SourceTestSuiteBase<String> {
@@ -81,7 +82,7 @@ public class JetStreamSourceITCase extends SourceTestSuiteBase<String> {
         Same as the existing implementation except that job metrics will be queried once all job tasks are
         running OR finished. This is needed here because not all generated split data by the test-contexts will be
         interpreted as unique splits by the source reader, so jobs may correctly have fewer running tasks than the
-        original test expects (1 for each generated split of data)
+        original test expects due to idle parallelism.
      **/
     @Override
     @TestTemplate

@@ -74,10 +74,9 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                         }
                     }
                 } catch (IllegalStateException e) {
-                    LOG.info("Split reader for {} has been paused.", splitId);
+                    LOG.warn("Split reader for {} has been paused.", splitId);
                 }
                 LOG.debug("Fetched {} new messages from split {}", i, splitId);
-//                System.out.printf("Fetched %d new messages from split %s%n", i, splitId);
             }
         });
         readerMetrics.updateMetrics();
@@ -143,7 +142,6 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                 return;
             }
             LOG.debug("Draining subscription to {} and resubscribing", splitId);
-            System.out.println("Draining subscription to " + splitId + " and resubscribing");
             try {
                 subscription.drain(Duration.ofSeconds(1));
                 ConsumerInfo info = subscription.getConsumerInfo();

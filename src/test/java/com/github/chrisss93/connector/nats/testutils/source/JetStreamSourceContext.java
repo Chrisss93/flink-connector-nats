@@ -18,7 +18,7 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.pulsar.shade.org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
+import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 
 public abstract class JetStreamSourceContext extends NatsTestContext
     implements DataStreamSourceExternalContext<String> {

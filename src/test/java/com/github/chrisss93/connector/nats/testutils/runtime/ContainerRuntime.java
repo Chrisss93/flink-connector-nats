@@ -16,7 +16,7 @@ public class ContainerRuntime implements NatsServerRuntime {
     private static final int NATS_PORT = 4222;
 
     @SuppressWarnings("resource")
-    public GenericContainer<?> natsContainer = new GenericContainer<>(IMAGE_NAME + ":" + IMAGE_TAG)
+    private final GenericContainer<?> natsContainer = new GenericContainer<>(IMAGE_NAME + ":" + IMAGE_TAG)
         .withCommand("-js")
         .withExposedPorts(NATS_PORT)
         .withLogConsumer(logger)

@@ -37,7 +37,7 @@ public class JetStreamWriter<T> implements SinkWriter<T> {
     private final ProcessingTimeService timeService;
     private final int maxPendingMessages;
     private final JetStreamSinkWriterMetrics writerMetrics;
-    public AtomicLong pendingMessages = new AtomicLong(0L);
+    private final AtomicLong pendingMessages = new AtomicLong(0L);
     private boolean closed = false;
     private long lastSync = System.currentTimeMillis();
 

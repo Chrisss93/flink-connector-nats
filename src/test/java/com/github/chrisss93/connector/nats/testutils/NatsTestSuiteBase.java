@@ -22,12 +22,11 @@ public abstract class NatsTestSuiteBase {
         return environment.client();
     }
 
-
     protected void createStream(StreamConfiguration conf) throws IOException, JetStreamApiException {
         client().jetStreamManagement().addStream(conf);
     }
-    protected void createStream(String streamName, String... subjectFilter) throws IOException, JetStreamApiException {
-        createStream(new StreamConfiguration.Builder().name(streamName).subjects(subjectFilter).build());
+    protected void createStream(String streamName, String... filters) throws IOException, JetStreamApiException {
+        createStream(new StreamConfiguration.Builder().name(streamName).subjects(filters).build());
     }
     protected void deleteStream(String streamName) throws IOException, JetStreamApiException {
         client().jetStreamManagement().deleteStream(streamName);

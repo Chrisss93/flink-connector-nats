@@ -1,7 +1,6 @@
 package com.github.chrisss93.connector.nats.source.enumerator;
 
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
-import com.google.common.collect.ImmutableSet;
 import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.DeliverPolicy;

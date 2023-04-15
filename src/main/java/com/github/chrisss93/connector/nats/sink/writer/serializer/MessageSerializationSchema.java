@@ -14,7 +14,7 @@ public interface MessageSerializationSchema<T> extends Serializable {
 
     String getSubject(T element);
 
-    default void open(SerializationSchema.InitializationContext context) throws Exception {}
+    default void open(SerializationSchema.InitializationContext context) {}
 
     default Message makeMessage(T element, Long timestamp) {
         return new NatsMessage(

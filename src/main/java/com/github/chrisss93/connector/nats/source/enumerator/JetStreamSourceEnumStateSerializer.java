@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class JetStreamSourceEnumStateSerializer implements SimpleVersionedSerializer<JetStreamSourceEnumState> {
-    public static JetStreamSourceEnumStateSerializer INSTANCE = new JetStreamSourceEnumStateSerializer();
+    public static final JetStreamSourceEnumStateSerializer INSTANCE = new JetStreamSourceEnumStateSerializer();
     @Override
     public int getVersion() {
         return JetStreamConsumerSplitSerializer.INSTANCE.getVersion();

@@ -5,7 +5,6 @@ import com.github.chrisss93.connector.nats.source.reader.JetStreamSplitReader;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import com.github.chrisss93.connector.nats.source.splits.SplitsRemoval;
 import io.nats.client.Message;
-import org.apache.flink.connector.base.source.reader.RecordsBySplits;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcher;
 import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcherManager;
@@ -15,8 +14,11 @@ import org.apache.flink.connector.base.source.reader.synchronization.FutureCompl
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class JetStreamSourceFetcherManager extends SplitFetcherManager<Message, JetStreamConsumerSplit> {
@@ -80,18 +82,16 @@ public class JetStreamSourceFetcherManager extends SplitFetcherManager<Message, 
      */
 
     public void signalCloseAllFetchers() {
-        fetchers.forEach( (id, fetcher) -> {
-            fetcher.enqueueTask(new SplitFetcherTask() {
-                @Override
-                public boolean run() {
-                    fetcher.getSplitReader().handleSplitsChanges(new SplitsRemoval<>());
-                    return true;
-                }
-                @Override
-                public void wakeUp() {
-                }
-            });
-        });
+        fetchers.forEach( (id, fetcher) -> fetcher.enqueueTask(new SplitFetcherTask() {
+            @Override
+            public boolean run() {
+                fetcher.getSplitReader().handleSplitsChanges(new SplitsRemoval<>());
+                return true;
+            }
+            @Override
+            public void wakeUp() {
+            }
+        }));
     }
 
     private SplitFetcher<Message, JetStreamConsumerSplit> getOrCreateFetcher(String splitId) {

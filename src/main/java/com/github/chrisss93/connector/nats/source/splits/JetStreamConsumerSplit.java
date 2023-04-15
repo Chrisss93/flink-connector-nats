@@ -4,8 +4,12 @@ import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
 import io.nats.client.api.ConsumerConfiguration;
 import org.apache.flink.api.connector.source.SourceSplit;
 
-import java.io.*;
-import java.util.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 
 public class JetStreamConsumerSplit implements SourceSplit {
     private final String stream;
@@ -46,13 +50,44 @@ public class JetStreamConsumerSplit implements SourceSplit {
         return getConfig().getStartSequence();
     }
 
+    public static void write(JetStreamConsumerSplit split, ObjectOutputStream out) throws IOException {
+        out.writeUTF(split.getStream());
+        out.writeObject(split.config);
+        out.writeInt(split.getPendingAcks().size());
+        for (String ack : split.getPendingAcks()) {
+            out.writeUTF(ack);
+        }
+    }
+
+    public static JetStreamConsumerSplit read(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        String stream = in.readUTF();
+        NATSConsumerConfig config = (NATSConsumerConfig) in.readObject();
+        int ackCount = in.readInt();
+        Set<String> acks = new HashSet<>(ackCount);
+        for (int i = 0; i < ackCount; i++) {
+            acks.add(in.readUTF());
+        }
+        return new JetStreamConsumerSplit(stream, config.build(), acks);
+    }
+
     @Override
     public String toString() {
         return "JetStreamConsumerSplit{" +
             "split=" + splitId() +
-            ", pendingAcks=" + pendingAcks.toString() +
-            ", config=" + getConfig().toString() +
-            '}';
+            ", pendingAcks=" + pendingAcks.size() +
+            ", config=" + printConfig() +
+            "}";
+    }
+
+    private String printConfig() {
+        ConsumerConfiguration conf = getConfig();
+
+        String start = "";
+        switch (conf.getDeliverPolicy()) {
+            case ByStartSequence: start = ", startSeq=" + conf.getStartSequence(); break;
+            case ByStartTime: start = ", startTime=" + conf.getStartTime(); break;
+        }
+        return "{filterSubject=" + conf.getFilterSubject() + start + ", ackPolicy=" + conf.getAckPolicy() + "}";
     }
 
     @Override
@@ -93,25 +128,5 @@ public class JetStreamConsumerSplit implements SourceSplit {
             myConfig.getNumReplicas() == otherConfig.getNumReplicas() &&
             myConfig.getRateLimit() == otherConfig.getRateLimit()
             ;
-    }
-
-    public static void write(JetStreamConsumerSplit split, ObjectOutputStream out) throws IOException {
-        out.writeUTF(split.getStream());
-        out.writeObject(split.config);
-        out.writeInt(split.getPendingAcks().size());
-        for (String ack : split.getPendingAcks()) {
-            out.writeUTF(ack);
-        }
-    }
-
-    public static JetStreamConsumerSplit read(ObjectInputStream in) throws IOException, ClassNotFoundException {
-        String stream = in.readUTF();
-        NATSConsumerConfig config = (NATSConsumerConfig) in.readObject();
-        int ackCount = in.readInt();
-        Set<String> acks = new HashSet<>(ackCount);
-        for (int i = 0; i < ackCount; i++) {
-            acks.add(in.readUTF());
-        }
-        return new JetStreamConsumerSplit(stream, config.build(), acks);
     }
 }

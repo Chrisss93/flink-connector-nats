@@ -207,7 +207,7 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
         reader.close();
     }
 
-    // Uncomment once Flink 1.17 is supported
+    // Uncomment for Flink 1.17+
     /*
     @Test
     void pauseAndResumeSplits(TestInfo test) throws Exception {

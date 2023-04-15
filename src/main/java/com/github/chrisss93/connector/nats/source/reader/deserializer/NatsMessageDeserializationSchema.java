@@ -8,7 +8,7 @@ import java.io.IOException;
 import java.io.Serializable;
 
 public interface NatsMessageDeserializationSchema<T> extends Serializable, ResultTypeQueryable<T> {
-    default void open(DeserializationSchema.InitializationContext context) throws Exception {
+    default void open(DeserializationSchema.InitializationContext context) {
     }
     T deserialize(Message message) throws IOException;
 

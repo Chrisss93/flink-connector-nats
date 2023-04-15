@@ -27,6 +27,7 @@ public abstract class JetStreamSinkContext extends NatsTestContext
     private static final int RECORD_SIZE_UPPER_BOUND = 300;
     private static final int RECORD_SIZE_LOWER_BOUND = 100;
     private static final int RECORD_STRING_SIZE = 50;
+    private static final byte[] PUBLISH_ACK_BODY = "{\"stream\":\"\", \"seq\": 1}".getBytes(StandardCharsets.UTF_8);
 
     private transient Dispatcher dispatcher;
     private final ConcurrentLinkedQueue<String> readerQueue = new ConcurrentLinkedQueue<>();
@@ -41,8 +42,8 @@ public abstract class JetStreamSinkContext extends NatsTestContext
     @Override
     public Sink<String> createSink(TestingSinkSettings sinkSettings) {
         dispatcher = runtime.client().createDispatcher(m -> {
-            runtime.client().publish(m.getReplyTo(), "{\"stream\":\"\", \"seq\": 1}".getBytes());
             readerQueue.add(new String(m.getData(), StandardCharsets.UTF_8));
+            runtime.client().publish(m.getReplyTo(), PUBLISH_ACK_BODY);
         });
         streamSubjectFilters().forEach(dispatcher::subscribe);
 

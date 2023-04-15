@@ -10,16 +10,16 @@ import java.util.function.Function;
 public class JetStreamStringWriter implements ExternalSystemSplitDataWriter<String> {
 
     private final Connection connection;
-    private final Function<String, String> subjectNammer;
+    private final Function<String, String> subjectNamer;
 
     public JetStreamStringWriter(Connection connection, Function<String, String> subject) {
         this.connection = connection;
-        this.subjectNammer = subject;
+        this.subjectNamer = subject;
     }
 
     @Override
     public void writeRecords(List<String> records) {
-        records.forEach(r -> connection.publish(subjectNammer.apply(r), r.getBytes(StandardCharsets.UTF_8)));
+        records.forEach(r -> connection.publish(subjectNamer.apply(r), r.getBytes(StandardCharsets.UTF_8)));
     }
 
     @Override

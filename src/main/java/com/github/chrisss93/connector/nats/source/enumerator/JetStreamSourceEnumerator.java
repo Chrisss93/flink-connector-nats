@@ -6,19 +6,16 @@ import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import io.nats.client.*;
 import io.nats.client.api.ConsumerConfiguration;
 import org.apache.flink.api.connector.source.*;
-import org.apache.flink.metrics.Gauge;
-import org.apache.flink.metrics.groups.SplitEnumeratorMetricGroup;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.pulsar.shade.org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
+import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 
 /**
  * Given a parallelism and number of splits, this enumerator assigns splits evenly across readers with no special
@@ -182,7 +179,7 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
     }
 
     @Override
-    public void close() throws IOException {}
+    public void close() {}
 
     @Override
     public void handleSourceEvent(int subtaskId, SourceEvent sourceEvent) {
@@ -193,10 +190,10 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
                 String.format("source event %s from reader %s is not supported", sourceEvent, subtaskId)
             );
         }
+        LOG.info("Closing all readers since reader {} has satisfied its stopping rule.", subtaskId);
         context.registeredReaders().forEach((k, v) -> {
             if (k != subtaskId) {
-                LOG.info("Closing reader {} as reader {} has already finished.", k, subtaskId);
-                context.sendEventToSourceReader(k, new CompleteAllSplitsEvent(subtaskId));
+                context.sendEventToSourceReader(k, new CompleteAllSplitsEvent());
             }
         });
     }

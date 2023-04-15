@@ -4,7 +4,6 @@ import com.github.chrisss93.connector.nats.common.NatsMetrics;
 import io.nats.client.Connection;
 import io.nats.client.Statistics;
 import io.nats.client.api.PublishAck;
-import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.SinkWriterMetricGroup;
 

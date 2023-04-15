@@ -4,7 +4,7 @@ import io.nats.client.Message;
 
 public class StreamSequenceStop implements StopRule {
 
-    protected long stopSequence;
+    protected final long stopSequence;
 
     public StreamSequenceStop(long stopSequence) {
         this.stopSequence = stopSequence;

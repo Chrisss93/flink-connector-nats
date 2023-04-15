@@ -26,6 +26,8 @@ import org.junit.jupiter.api.*;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.flink.runtime.metrics.groups.UnregisteredMetricGroups.createUnregisteredOperatorMetricGroup;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,7 +78,10 @@ public class JetStreamWriterTest extends NatsTestSuiteBase {
             client().jetStreamManagement().getStreamInfo(streamName).getStreamState().getLastSequence()
         ).isEqualTo(1);
 
-        JetStreamSubscription sub = client().jetStream().subscribe(streamName + ".*", PullSubscribeOptions.DEFAULT_PULL_OPTS);
+        JetStreamSubscription sub = client().jetStream().subscribe(
+            streamName + ".*",
+            PullSubscribeOptions.DEFAULT_PULL_OPTS
+        );
         Message message = sub.reader(1, 2).nextMessage(Duration.ofMillis(200));
         assertThat(message.getSubject()).isEqualTo(streamName + "." + body);
         assertThat(message.getData()).isEqualTo(body.getBytes(StandardCharsets.UTF_8));
@@ -169,9 +174,11 @@ public class JetStreamWriterTest extends NatsTestSuiteBase {
             .fetch(256, Duration.ofMillis(200));
 
         // The two good writes make it to NATS, the second bad write does not.
-        assertThat(messages.size()).isEqualTo(2);
-        assertThat(messages.get(0).getData()).isEqualTo(body1.getBytes(StandardCharsets.UTF_8));
-        assertThat(messages.get(1).getData()).isEqualTo(body2.getBytes(StandardCharsets.UTF_8));
+        assertThat(
+            messages.stream().map(m -> new String(m.getData(), StandardCharsets.UTF_8))
+        ).containsExactlyElementsOf(
+            Stream.of(body1, body2).collect(Collectors.toList())
+        );
     }
 
     private static class MockInitContext implements Sink.InitContext {

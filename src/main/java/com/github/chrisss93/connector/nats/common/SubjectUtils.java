@@ -1,21 +1,18 @@
 package com.github.chrisss93.connector.nats.common;
 
-import org.bouncycastle.util.Strings;
-
 import java.util.Arrays;
-import java.util.List;
 
 public abstract class SubjectUtils {
-    private static char SEP = '.';
-    private static char PARTIAL_WILDCARD = '*';
-    private static char FULL_WILDCARD = '>';
+    private static final String SEP = "\\.";
+    private static final char PARTIAL_WILDCARD = '*';
+    private static final char FULL_WILDCARD = '>';
 
-    public static boolean overlappingFilterSubjects(List<String> filters) {
-        for (int i = 0; i < filters.size(); i++) {
-            String[] iTokenized = Strings.split(filters.get(i), SEP);
-            for (int j = i+1; j < filters.size(); j++) {
-                String[] jTokenized = Strings.split(filters.get(j), SEP);
-                if (isSubset(iTokenized, jTokenized) || isSubset(jTokenized, iTokenized)) {
+    public static boolean overlappingFilterSubjects(String[] filters) {
+        for (int i = 0; i < filters.length; i++) {
+            String[] iToken = filters[i].split(SEP);
+            for (int j = i+1; j < filters.length; j++) {
+                String[] jToken = filters[j].split(SEP);
+                if (Arrays.equals(iToken, jToken) || isSubset(iToken, jToken) || isSubset(jToken, iToken)) {
                     return true;
                 }
             }
@@ -23,7 +20,7 @@ public abstract class SubjectUtils {
         return false;
     }
 
-    // Copied from NATS-server implementation in golang.
+    // Copied from nats-server golang implementation: server/sublist.go
     private static boolean isSubset(String[] tokens, String[] test) {
         for (int i = 0; i < test.length; i++) {
             if (i > tokens.length) {

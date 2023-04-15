@@ -18,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Depending on the NATS consumer configuration, NATS might not have a fixed-sized progress indicator to send to the
@@ -79,7 +78,7 @@ public abstract class JetStreamSourceReaderBase<T>
 //        Acks for newer checkpoints should contain all the acks for previous checkpoints and more. So we never
 //        really need to keep acks for previous incomplete checkpoints. But it's useful at least to expose how
 //        many checkpoints were incomplete for testing. And since the duplicate elements are all references
-//        cleaning it up here vs. in notifyCheckpointComplete saves very little space anyways.
+//        cleaning it up here vs. in notifyCheckpointComplete saves very little space anyhow.
 
 //        messagesToAck.headMap(checkpointId).clear();
         return splits;

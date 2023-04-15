@@ -20,11 +20,11 @@ public class JetStreamConsumerSplitSerializer implements SimpleVersionedSerializ
 
     @Override
     public byte[] serialize(JetStreamConsumerSplit split) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             ObjectOutputStream out = new ObjectOutputStream(baos)) {
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+             ObjectOutputStream out = new ObjectOutputStream(bytes)) {
             JetStreamConsumerSplit.write(split, out);
             out.flush();
-            return baos.toByteArray();
+            return bytes.toByteArray();
         }
     }
 

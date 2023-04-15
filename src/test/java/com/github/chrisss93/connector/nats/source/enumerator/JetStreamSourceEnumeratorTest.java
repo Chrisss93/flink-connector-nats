@@ -10,9 +10,7 @@ import org.apache.flink.api.connector.source.ReaderInfo;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.api.connector.source.mocks.MockSplitEnumeratorContext;
-import org.apache.flink.util.TestLoggerExtension;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -27,7 +25,7 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
     private static final int READER0 = 0;
 
     @Test
-    public void initAssignReadersSplits() throws Exception {
+    public void initAssignReadersSplits() {
         MockSplitEnumeratorContext<JetStreamConsumerSplit> context = new MockSplitEnumeratorContext<>(NUM_SUBTASKS);
         JetStreamSourceEnumerator enumerator = createEnumerator(
             Stream.of("a", "b", "c").collect(Collectors.toSet()),
@@ -50,7 +48,7 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
     }
 
     @Test
-    public void initMoreSplitsThanReaders() throws Exception {
+    public void initMoreSplitsThanReaders() {
         MockSplitEnumeratorContext<JetStreamConsumerSplit> context = new MockSplitEnumeratorContext<>(NUM_SUBTASKS);
         JetStreamSourceEnumerator enumerator = createEnumerator(
             Stream.of("a", "b", "c", "d").collect(Collectors.toSet()),
@@ -68,6 +66,7 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
         assertThat(assignments).hasSize(1);
         Map<Integer, List<JetStreamConsumerSplit>> assignment = assignments.get(0).assignment();
 
+        assertThat(assignment).hasSize(3);
         assertThat(assignment.get(0)).hasSize(1);
         assertThat(assignment.get(1)).hasSize(2);
         assertThat(assignment.get(2)).hasSize(1);
@@ -76,7 +75,7 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
     }
 
     @Test
-    public void addSplitsBack() throws Exception {
+    public void addSplitsBack() {
         MockSplitEnumeratorContext<JetStreamConsumerSplit> context = new MockSplitEnumeratorContext<>(NUM_SUBTASKS);
         JetStreamSourceEnumerator enumerator = createEnumerator(
             Stream.of("a", "b", "c").collect(Collectors.toSet()),

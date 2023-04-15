@@ -2,6 +2,7 @@ package com.github.chrisss93.connector.nats.source.reader.deserializer;
 
 import io.nats.client.Message;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.common.typeinfo.Types;
 
 public class StringDeserializer implements NatsMessageDeserializationSchema<String> {
     public String deserialize(Message message) {
@@ -9,6 +10,6 @@ public class StringDeserializer implements NatsMessageDeserializationSchema<Stri
     }
 
     public TypeInformation<String> getProducedType() {
-        return TypeInformation.of(String.class);
+        return Types.STRING;
     }
 }

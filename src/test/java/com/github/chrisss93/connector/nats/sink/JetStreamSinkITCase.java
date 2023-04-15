@@ -8,15 +8,12 @@ import com.github.chrisss93.connector.nats.testutils.sink.cases.MultiSubjectCont
 import com.github.chrisss93.connector.nats.testutils.sink.cases.SingleSubjectContext;
 import com.github.chrisss93.connector.nats.testutils.sink.cases.SmallBufferContext;
 import org.apache.flink.connector.testframe.environment.MiniClusterTestEnvironment;
-import org.apache.flink.connector.testframe.environment.TestEnvironment;
-import org.apache.flink.connector.testframe.external.sink.DataStreamSinkExternalContext;
 import org.apache.flink.connector.testframe.junit.annotations.TestContext;
 import org.apache.flink.connector.testframe.junit.annotations.TestEnv;
 import org.apache.flink.connector.testframe.junit.annotations.TestExternalSystem;
 import org.apache.flink.connector.testframe.junit.annotations.TestSemantics;
 import org.apache.flink.connector.testframe.testsuites.SinkTestSuiteBase;
 import org.apache.flink.streaming.api.CheckpointingMode;
-import org.junit.jupiter.api.Disabled;
 
 import static org.apache.flink.streaming.api.CheckpointingMode.AT_LEAST_ONCE;
 

@@ -201,7 +201,7 @@ public class JetStreamSourceBuilder<T> {
         }
 
         if (filters.size() > 1) {
-            if (SubjectUtils.overlappingFilterSubjects(filters)) {
+            if (SubjectUtils.overlappingFilterSubjects(filters.toArray(new String[0]))) {
                 throw new IllegalArgumentException("NATS consumers have overlapping subject filters: " + filters);
             }
         }
