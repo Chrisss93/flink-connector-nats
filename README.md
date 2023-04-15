@@ -76,12 +76,12 @@ The example above will try to send data to the subject: `bar`. If the NATS serve
 * ~~Add Bounded mode for Source connector~~
 * ~~Add a canonical builder~~
 * Performance benchmarks
-* Telemetry
+* ~~Telemetry~~
 * ~~Source unit-tests~~
 * ~~Sink unit-tests~~
 * Table API?
 * ~~E2E testing~~
-* Implement ContainerRuntime for unit-tests to avoid external binary dependency
+* ~~Implement ContainerRuntime for unit-tests to avoid external binary dependency~~
 * Publishing artifacts (against multiple Flink versions)
 * ~~Simplify `JetStreamConsumerSplit` to just be the pending acks, stream name and consumer name. No need to carry the entire un-serializable NATS ConsumerInfo~~
 * ~~Somehow test that the connector does not rely on NATS for fault tolerance. Instead, handle progress recovery seamlessly as Kafka/Pulsar connectors do through checkpoints by default.~~

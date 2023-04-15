@@ -1,6 +1,5 @@
 package com.github.chrisss93.connector.nats.testutils;
 
-import com.github.chrisss93.connector.nats.testutils.runtime.JVMRuntime;
 import io.nats.client.Connection;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.api.StreamConfiguration;
@@ -17,7 +16,7 @@ import java.io.IOException;
 public abstract class NatsTestSuiteBase {
 
     @RegisterExtension
-    final NatsTestEnvironment environment = new NatsTestEnvironment(new JVMRuntime());
+    static final NatsTestEnvironment environment = new NatsTestEnvironment();
 
     protected Connection client() {
         return environment.client();
