@@ -146,9 +146,6 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
                 LOG.info("Reader {} will be assigned splits: {}", readerId,
                     splits.stream().map(JetStreamConsumerSplit::splitId).collect(Collectors.toList())
                 );
-                System.out.printf("Reader %d will be assigned splits: %s%n", readerId,
-                    splits.stream().map(JetStreamConsumerSplit::splitId).collect(Collectors.toList())
-                );
                 incrementalAssignments.computeIfAbsent(readerId, k -> new ArrayList<>()).addAll(splits);
                 assignedSplits.addAll(splits);
             }

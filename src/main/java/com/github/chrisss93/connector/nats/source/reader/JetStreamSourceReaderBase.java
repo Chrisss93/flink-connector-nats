@@ -91,7 +91,6 @@ public abstract class JetStreamSourceReaderBase<T>
 
         if (acks == null) {
             LOG.debug("Messages for checkpoint {} do not exist or have already been acked.", checkpointId);
-            System.out.printf("Messages for checkpoint %s do not exist or have already been acked.%n", checkpointId);
             return;
         }
         ((JetStreamSourceFetcherManager) splitFetcherManager).acknowledgeMessages(acks, doubleAck);
@@ -116,7 +115,6 @@ public abstract class JetStreamSourceReaderBase<T>
     @Override
     protected void onSplitFinished(Map<String, JetStreamConsumerSplitState> finishedSplitIds) {
         LOG.info("Completed splits: {}", finishedSplitIds.keySet());
-        System.out.println("Completed splits: " + finishedSplitIds.keySet());
         context.sendSplitRequest();
         if (!closedByAnotherReader) {
             context.sendSourceEventToCoordinator(new CompleteAllSplitsEvent());
