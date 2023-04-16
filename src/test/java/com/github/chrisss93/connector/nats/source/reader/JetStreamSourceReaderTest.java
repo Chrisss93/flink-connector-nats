@@ -48,7 +48,7 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
 
         String streamName =  sanitizeDisplay(test);
         String consumerName = randomAlphabetic(10);
-        JetStreamSourceReaderBase<String> reader = createReader(streamName, ackEach);
+        JetStreamSourceReader<String> reader = createReader(streamName, ackEach);
 
         reader.addSplits(singletonList(buildSplit(streamName, consumerName, ackEach)));
         reader.notifyNoMoreSplits();
@@ -90,7 +90,7 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
         String streamName =  sanitizeDisplay(test);
         String consumer1 = "foo";
         String consumer2 = "bar";
-        JetStreamSourceReaderBase<String> reader = createReader(streamName, ackEach);
+        JetStreamSourceReader<String> reader = createReader(streamName, ackEach);
 
         // Multiple splits this time
         List<JetStreamConsumerSplit> splits = Arrays.asList(
@@ -145,8 +145,8 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
         String streamName =  sanitizeDisplay(test);
         String consumerName = randomAlphabetic(10);
 
-        JetStreamSourceReaderBase<String> reader =
-            (JetStreamSourceReaderBase<String>) createSourceConfig(streamName, ackEach)
+        JetStreamSourceReader<String> reader =
+            (JetStreamSourceReader<String>) createSourceConfig(streamName, ackEach)
                 .setStoppingRule(new StreamSequenceStop(1))
                 .build()
                 .createReader(new TestingReaderContext());
@@ -194,7 +194,7 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
     void checkpointWithNoSplitRecords(boolean ackEach, TestInfo test) throws Exception {
         String streamName =  sanitizeDisplay(test);
         String consumerName = randomAlphabetic(10);
-        JetStreamSourceReaderBase<String> reader = createReader(streamName, ackEach);
+        JetStreamSourceReader<String> reader = createReader(streamName, ackEach);
 
         reader.addSplits(singletonList(buildSplit(streamName, consumerName, ackEach)));
         reader.notifyNoMoreSplits();
@@ -288,7 +288,7 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
      */
 
     private void pollUntil(
-        JetStreamSourceReaderBase<String> reader,
+        JetStreamSourceReader<String> reader,
         ReaderOutput<String> output,
         Supplier<Boolean> condition,
         String errorMessage) throws Exception {
@@ -296,7 +296,7 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
         pollUntil(reader, output, condition, Duration.ofSeconds(30), errorMessage);
     }
     private void pollUntil(
-        JetStreamSourceReaderBase<String> reader,
+        JetStreamSourceReader<String> reader,
         ReaderOutput<String> output,
         Supplier<Boolean> condition,
         Duration timeout,
@@ -317,8 +317,8 @@ public class JetStreamSourceReaderTest extends NatsTestSuiteBase {
             errorMessage);
     }
 
-    private JetStreamSourceReaderBase<String> createReader(String streamName, boolean ackEach) {
-        return (JetStreamSourceReaderBase<String>) createSourceConfig(streamName, ackEach)
+    private JetStreamSourceReader<String> createReader(String streamName, boolean ackEach) {
+        return (JetStreamSourceReader<String>) createSourceConfig(streamName, ackEach)
             .build()
             .createReader(new TestingReaderContext());
     }

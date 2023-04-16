@@ -2,7 +2,6 @@ package com.github.chrisss93.connector.nats.source;
 
 import com.github.chrisss93.connector.nats.testutils.NatsTestContextFactory;
 import com.github.chrisss93.connector.nats.testutils.NatsTestEnvironment;
-import com.github.chrisss93.connector.nats.testutils.runtime.JVMRuntime;
 import com.github.chrisss93.connector.nats.testutils.source.*;
 import com.github.chrisss93.connector.nats.testutils.source.cases.MultiFilterStreamContext;
 import com.github.chrisss93.connector.nats.testutils.source.cases.MultiThreadedFetcherContext;
@@ -54,7 +53,7 @@ public class JetStreamSourceITCase extends SourceTestSuiteBase<String> {
 
     // Defines external nats-server system
     @TestExternalSystem
-    NatsTestEnvironment natsEnv = new NatsTestEnvironment(new JVMRuntime());
+    NatsTestEnvironment natsEnv = new NatsTestEnvironment();
 
     // Checkpointing semantics in source connector are not configurable.
     @SuppressWarnings("unused")

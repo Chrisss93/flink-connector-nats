@@ -1,6 +1,6 @@
 package com.github.chrisss93.connector.nats.source.reader;
 
-import com.github.chrisss93.connector.nats.source.event.CompleteAllSplitsEvent;
+import com.github.chrisss93.connector.nats.source.event.CompleteSplitsEvent;
 import com.github.chrisss93.connector.nats.source.reader.fetcher.JetStreamSourceFetcherManager;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplitState;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.function.Function;
 
 /**
  * Depending on the NATS consumer configuration, NATS might not have a fixed-sized progress indicator to send to the
@@ -36,32 +37,37 @@ import java.util.*;
  * </p>
  */
 
-public abstract class JetStreamSourceReaderBase<T>
+public class JetStreamSourceReader<T>
     extends SourceReaderBase<Message, T, JetStreamConsumerSplit, JetStreamConsumerSplitState> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(JetStreamSourceReaderBase.class);
+    private static final Logger LOG = LoggerFactory.getLogger(JetStreamSourceReader.class);
     private final SortedMap<Long, Map<String, Set<String>>> messagesToAck;
+    Function<JetStreamConsumerSplit, JetStreamConsumerSplitState> initSplit;
     private final boolean doubleAck;
     private boolean closedByAnotherReader = false;
 
-    public JetStreamSourceReaderBase(
+    public JetStreamSourceReader(
         FutureCompletingBlockingQueue<RecordsWithSplitIds<Message>> elementsQueue,
         SplitFetcherManager<Message, JetStreamConsumerSplit> splitFetcherManager,
         RecordEmitter<Message, T, JetStreamConsumerSplitState> recordEmitter,
+        Function<JetStreamConsumerSplit, JetStreamConsumerSplitState> initSplit,
         boolean doubleAck,
         SourceReaderContext context) {
 
-        this(elementsQueue, splitFetcherManager, recordEmitter, doubleAck, context.getConfiguration(), context);
+        this(elementsQueue, splitFetcherManager, recordEmitter, initSplit, doubleAck, context.getConfiguration(),
+            context);
     }
-    public JetStreamSourceReaderBase(
+    public JetStreamSourceReader(
             FutureCompletingBlockingQueue<RecordsWithSplitIds<Message>> elementsQueue,
             SplitFetcherManager<Message, JetStreamConsumerSplit> splitFetcherManager,
             RecordEmitter<Message, T, JetStreamConsumerSplitState> recordEmitter,
+            Function<JetStreamConsumerSplit, JetStreamConsumerSplitState> initSplit,
             boolean doubleAck,
             Configuration config,
             SourceReaderContext context) {
         super(elementsQueue, splitFetcherManager, recordEmitter, config, context);
         this.messagesToAck = Collections.synchronizedSortedMap(new TreeMap<>());
+        this.initSplit = initSplit;
         this.doubleAck = doubleAck;
     }
 
@@ -117,17 +123,23 @@ public abstract class JetStreamSourceReaderBase<T>
         LOG.info("Completed splits: {}", finishedSplitIds.keySet());
         context.sendSplitRequest();
         if (!closedByAnotherReader) {
-            context.sendSourceEventToCoordinator(new CompleteAllSplitsEvent());
+            context.sendSourceEventToCoordinator(new CompleteSplitsEvent());
         }
     }
 
     @Override
+    protected JetStreamConsumerSplitState initializedState(JetStreamConsumerSplit split) {
+        return initSplit.apply(split);
+    }
+
+    @Override
     public void handleSourceEvents(SourceEvent sourceEvent) {
-        if (!(sourceEvent instanceof CompleteAllSplitsEvent)) {
+        if (!(sourceEvent instanceof CompleteSplitsEvent)) {
             throw new UnsupportedOperationException(String.format("source event %s is not supported", sourceEvent));
         }
-        closedByAnotherReader = true;
-        ((JetStreamSourceFetcherManager) splitFetcherManager).signalCloseAllFetchers();
+        CompleteSplitsEvent splitsToComplete = (CompleteSplitsEvent) sourceEvent;
+        closedByAnotherReader = (splitsToComplete.allSplits());
+        ((JetStreamSourceFetcherManager) splitFetcherManager).signalCloseAllFetchers(splitsToComplete);
     }
 
     @VisibleForTesting

@@ -1,6 +1,7 @@
 package com.github.chrisss93.connector.nats.source.reader.fetcher;
 
 
+import com.github.chrisss93.connector.nats.source.event.CompleteSplitsEvent;
 import com.github.chrisss93.connector.nats.source.reader.JetStreamSplitReader;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import com.github.chrisss93.connector.nats.source.splits.SplitsRemoval;
@@ -8,18 +9,14 @@ import io.nats.client.Message;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcher;
 import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcherManager;
-import org.apache.flink.connector.base.source.reader.fetcher.SplitFetcherTask;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.synchronization.FutureCompletingBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public class JetStreamSourceFetcherManager extends SplitFetcherManager<Message, JetStreamConsumerSplit> {
     private static final Logger LOG = LoggerFactory.getLogger(JetStreamSourceFetcherManager.class);
@@ -81,25 +78,42 @@ public class JetStreamSourceFetcherManager extends SplitFetcherManager<Message, 
     }
      */
 
-    public void signalCloseAllFetchers() {
-        fetchers.forEach( (id, fetcher) -> fetcher.enqueueTask(new SplitFetcherTask() {
-            @Override
-            public boolean run() {
-                fetcher.getSplitReader().handleSplitsChanges(new SplitsRemoval<>());
-                return true;
+    public void signalCloseAllFetchers(CompleteSplitsEvent event) {
+        fetchers.forEach( (id, fetcher) -> fetcher.enqueueTask((NoWakeSplitFetcherTask) () -> {
+
+            SplitsRemoval<JetStreamConsumerSplit> signal = event.allSplits()
+                ? new SplitsRemoval<>()
+                : makeSplitsRemoval(fetcher, event.getSplits());
+
+            if (event.allSplits() || signal.splits().size() > 0) {
+                fetcher.getSplitReader().handleSplitsChanges(signal);
             }
-            @Override
-            public void wakeUp() {
-            }
+            return true;
         }));
     }
 
+    // Find the subset of supplied splits that are assigned to the supplied fetcher and prepare a SplitsRemoval
+    private SplitsRemoval<JetStreamConsumerSplit> makeSplitsRemoval(
+        SplitFetcher<?, ?> fetcher,
+        Set<JetStreamConsumerSplit> splits) {
+
+        List<JetStreamConsumerSplit> splitsForFetcher = splits.stream()
+            .filter(s -> splitIdToFetcherId(s.splitId()) == fetcher.fetcherId())
+            .collect(Collectors.toList());
+
+        return new SplitsRemoval<>(splitsForFetcher);
+    }
+
+
     private SplitFetcher<Message, JetStreamConsumerSplit> getOrCreateFetcher(String splitId) {
-        int fetcherId = Math.floorMod(splitId.hashCode(), numFetchers);
-        SplitFetcher<Message, JetStreamConsumerSplit> fetcher = fetchers.get(fetcherId);
+        SplitFetcher<Message, JetStreamConsumerSplit> fetcher = fetchers.get(splitIdToFetcherId(splitId));
         if (fetcher == null) {
             fetcher = createSplitFetcher();
         }
         return fetcher;
+    }
+
+    private int splitIdToFetcherId(String splitId) {
+        return Math.floorMod(splitId.hashCode(), numFetchers);
     }
 }

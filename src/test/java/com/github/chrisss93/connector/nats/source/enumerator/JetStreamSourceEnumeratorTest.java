@@ -164,6 +164,7 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
             streamName,
             configs,
             dynamicConsumer,
+            -1,
             Boundedness.CONTINUOUS_UNBOUNDED,
             context
         );
