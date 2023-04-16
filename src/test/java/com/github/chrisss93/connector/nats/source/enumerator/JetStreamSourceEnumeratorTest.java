@@ -1,15 +1,15 @@
 package com.github.chrisss93.connector.nats.source.enumerator;
 
 import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
+import com.github.chrisss93.connector.nats.source.event.CompleteSplitsEvent;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import com.github.chrisss93.connector.nats.testutils.NatsTestSuiteBase;
 import io.nats.client.Options;
 import io.nats.client.api.ConsumerConfiguration;
-import org.apache.flink.api.connector.source.Boundedness;
-import org.apache.flink.api.connector.source.ReaderInfo;
-import org.apache.flink.api.connector.source.SplitEnumeratorContext;
-import org.apache.flink.api.connector.source.SplitsAssignment;
+import io.nats.client.api.StreamConfiguration;
+import org.apache.flink.api.connector.source.*;
 import org.apache.flink.api.connector.source.mocks.MockSplitEnumeratorContext;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -148,9 +148,95 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
         enumerator.close();
     }
 
+    @Test
+    public void periodicSplitDiscovery() throws Exception {
+        int parallelism = 2;
+        String[] subjects = new String[]{"red", "green", "blue", "yellow"};
+        createStream(streamName, subjects);
+
+        MockSplitEnumeratorContext<JetStreamConsumerSplit> context = new MockSplitEnumeratorContext<>(parallelism);
+        JetStreamSourceEnumerator enumerator = createEnumerator(Collections.singleton("na"), true, 500L, context);
+
+        // Register readers
+        for (int i = 0; i < parallelism; i++) {
+            registerReader(context, enumerator, i);
+        }
+
+        enumerator.start();
+        assertThat(context.getPeriodicCallables())
+            .as("A periodic split discovery callable should have been scheduled")
+            .hasSize(1);
+        assertThatCode(context::runNextOneTimeCallable).doesNotThrowAnyException();
+
+        assertThat(context.getSplitsAssignmentSequence()).hasSize(1);
+        List<String> assigned = context
+            .getSplitsAssignmentSequence()
+            .stream()
+            .flatMap(x -> x.assignment().values().stream().flatMap(Collection::stream))
+            .map(x -> x.getConfig().getFilterSubject())
+            .collect(Collectors.toList());
+
+        assertThat(assigned).containsExactlyInAnyOrder(subjects);
+
+        // Edit the stream's subject-filter configuration
+        String[] newSubjects = new String[]{"green", "blue", "orange"};
+        client().jetStreamManagement().updateStream(
+            StreamConfiguration.builder()
+                .name(streamName)
+                .subjects(newSubjects)
+                .build()
+        );
+        // Discover the new subject-filters
+        assertThatCode(() -> context.runPeriodicCallable(0)).doesNotThrowAnyException();
+
+        // Check for new split assignment for new subject-filter: orange
+        assertThat(context.getSplitsAssignmentSequence()).hasSize(2);
+        Map<Integer, List<JetStreamConsumerSplit>> assignment = context.getSplitsAssignmentSequence()
+            .get(1)
+            .assignment();
+
+        assertThat(assignment)
+            .hasSize(1)
+            .extracting(x -> x.get(0).stream()
+                .map(y -> y.getConfig().getFilterSubject())
+                .collect(Collectors.toList()))
+            .isEqualTo(Collections.singletonList("orange"));
+
+        // Check that special source-events have been emitted for assigned but outdated splits: red and yellow
+        assertThat(context.getSentSourceEvent()).hasSize(2);
+        List<SourceEvent> events = context.getSentSourceEvent()
+            .values()
+            .stream()
+            .flatMap(Collection::stream)
+            .collect(Collectors.toList());
+
+        assertThat(events).hasSize(2);
+
+        assertThat(events.get(0))
+            .extracting(e -> ((CompleteSplitsEvent) e).getSplits().stream()
+                .map(s -> s.getConfig().getFilterSubject())
+                .collect(Collectors.toList()))
+            .isEqualTo(Collections.singletonList("yellow"));
+
+        assertThat(events.get(1))
+            .extracting(e -> ((CompleteSplitsEvent) e).getSplits().stream()
+                .map(s -> s.getConfig().getFilterSubject())
+                .collect(Collectors.toList()))
+            .isEqualTo(Collections.singletonList("red"));
+
+        deleteStream(streamName);
+        enumerator.close();
+    }
+
 
     private JetStreamSourceEnumerator createEnumerator(Set<String> splitNames,
                                                        boolean dynamicConsumer,
+                                                       SplitEnumeratorContext<JetStreamConsumerSplit> context) {
+        return createEnumerator(splitNames, dynamicConsumer, -1, context);
+    }
+    private JetStreamSourceEnumerator createEnumerator(Set<String> splitNames,
+                                                       boolean dynamicConsumer,
+                                                       long discoveryInterval,
                                                        SplitEnumeratorContext<JetStreamConsumerSplit> context) {
         Properties props = new Properties();
         props.setProperty(Options.PROP_URL, client().getConnectedUrl());
@@ -164,7 +250,7 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
             streamName,
             configs,
             dynamicConsumer,
-            -1,
+            discoveryInterval,
             Boundedness.CONTINUOUS_UNBOUNDED,
             context
         );

@@ -16,6 +16,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.commons.lang3.RandomStringUtils.random;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 
 /**
@@ -110,7 +111,9 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
         Stream<? extends ConsumerConfiguration.Builder> configs = consumerConfigs.stream();
 
         if (discoverSplits) {
-            ConsumerConfiguration.Builder config = consumerConfigs.iterator().next();
+            ConsumerConfiguration.Builder config = ConsumerConfiguration.builder(
+                consumerConfigs.iterator().next().build()
+            );
             String prefix = config.build().getName();
             try (Connection connection = Nats.connect(connectOpts)) {
                 configs = connection
@@ -120,7 +123,8 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
                     .getSubjects()
                     .stream()
                     .map(s -> {
-                        String fullName = prefix + "-" + randomAlphabetic(5);
+                        String fullName = prefix + "-" +
+                            random(5, 0, 0, true, false, null, new Random(s.hashCode()));
                         return config.filterSubject(s).name(fullName).durable(fullName);
                     });
             }
@@ -137,11 +141,14 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
         assignPendingSplits(context.registeredReaders().keySet());
     }
 
-    private void preparePendingSplits(List<JetStreamConsumerSplit> fetchedConsumers) {
+    private void preparePendingSplits(List<JetStreamConsumerSplit> fetchedSplits) {
         int assigned = assignedSplits.values().stream().mapToInt(Set::size).sum();
-        for (int i = 0; i < fetchedConsumers.size(); i++) {
+        for (int i = 0; i < fetchedSplits.size(); i++) {
             int readerId = (assigned + i + 1) % context.currentParallelism();
-            pendingSplitAssignments.computeIfAbsent(readerId, k -> new HashSet<>()).add(fetchedConsumers.get(i));
+            JetStreamConsumerSplit split = fetchedSplits.get(i);
+            if (assignedSplits.values().stream().noneMatch(x -> x.contains(split))) {
+                pendingSplitAssignments.computeIfAbsent(readerId, k -> new HashSet<>()).add(split);
+            }
         }
     }
 
