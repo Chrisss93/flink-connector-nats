@@ -180,8 +180,10 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
     private void revokeOutdatedSplits(List<JetStreamConsumerSplit> splits) {
         for (Map.Entry<Integer, Set<JetStreamConsumerSplit>> e : assignedSplits.entrySet()) {
             Set<JetStreamConsumerSplit> revokes = Sets.difference(e.getValue(), new HashSet<>(splits));
-            LOG.info("Revoking outdated splits {} from reader {}", revokes, e.getKey());
-            context.sendEventToSourceReader(e.getKey(), new CompleteSplitsEvent(revokes));
+            if (!revokes.isEmpty()) {
+                LOG.info("Revoking outdated splits: {} from reader {}", revokes, e.getKey());
+                context.sendEventToSourceReader(e.getKey(), new CompleteSplitsEvent(revokes));
+            }
         }
     }
 

@@ -35,10 +35,10 @@ public class JetStreamSource<OUT>
     private final Set<NATSConsumerConfig> consumerConfigs;
     private final StopRule stopRule;
     private final boolean discoverSplits;
+    private final long splitDiscoveryIntervalMs;
     private final boolean ackMessageOnCheckpoint;
     private final boolean ackEachMessage;
     private final int numFetcherThreads;
-    private final long filterDiscoveryIntervalMs;
 
     public JetStreamSource(Properties connectProps,
                            NatsMessageDeserializationSchema<OUT> deserializationSchema,
@@ -46,7 +46,7 @@ public class JetStreamSource<OUT>
                            Set<NATSConsumerConfig> consumerConfigs,
                            StopRule stopRule,
                            boolean discoverSplits,
-                           long filterDiscoveryIntervalMs,
+                           long splitDiscoveryIntervalMs,
                            boolean ackMessageOnCheckpoint,
                            boolean ackEachMessage,
                            int numFetcherThreads
@@ -57,10 +57,10 @@ public class JetStreamSource<OUT>
         this.consumerConfigs = consumerConfigs;
         this.stopRule = stopRule;
         this.discoverSplits = discoverSplits;
+        this.splitDiscoveryIntervalMs = splitDiscoveryIntervalMs;
         this.ackMessageOnCheckpoint = ackMessageOnCheckpoint;
         this.ackEachMessage = ackEachMessage;
         this.numFetcherThreads = numFetcherThreads;
-        this.filterDiscoveryIntervalMs = filterDiscoveryIntervalMs;
     }
 
     @Override
@@ -98,7 +98,7 @@ public class JetStreamSource<OUT>
             stream,
             consumerConfigs,
             discoverSplits,
-            filterDiscoveryIntervalMs,
+            splitDiscoveryIntervalMs,
             getBoundedness(),
             enumContext
         );
@@ -113,7 +113,7 @@ public class JetStreamSource<OUT>
             stream,
             consumerConfigs,
             discoverSplits,
-            filterDiscoveryIntervalMs,
+            splitDiscoveryIntervalMs,
             getBoundedness(),
             enumContext,
             checkpoint

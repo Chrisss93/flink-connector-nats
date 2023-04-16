@@ -10,7 +10,7 @@ JetStream enables source replay, but NATS still lacks transactions. Therefore, t
 
 - [x] Bounded mode for Source connector
 - [x] Failure recovery via Flink checkpoints with no other external dependencies
-- [x] Unit+integration tests for source+sink connector
+- [x] Unit+e2e tests for source+sink connector
 - [x] Flink metrics and telemetry for source+sink connector
 - [x] Periodic, dynamic split discovery for source connector
 - [ ] Table API
@@ -85,4 +85,5 @@ The example above will try to send data to the subject: `bar`. If the NATS serve
 
 * Potentially remove support for NATS Ack-All and only support a cumulative acknowledgement model. This would allow us to remove an abstraction and simplify the checkpointing code a bit. This would probably mean we can remove the single vs. double ack code-path as well (should really be using double-ack at all times).
 * Upgrade NATS client library once [multi-filter consumers](https://github.com/nats-io/nats.java/issues/865) are supported. This will allow us to maintain a single subscription per fetcher (no matter how many splits it is responsible for).
-* Subject-filter is not a "natural" partitioning for a NATS stream. There are no guarantees of even distribution of stream data across subjects. In this case it should not be unexpected for one single split to produce more data than another. Split skewness is (in general) not real for these sorts of splits. We should probably turn off split-aware watermark generation or make it the configurable default and go back to global source watermarks (ReaderOutput). This is difficult with the current implementation since it extends `SourceReaderBase`. I really don't want to have to reimplement most of that class but for one small change...
+* Should split-manager assign fetchers to split-readers round-robin the same way the enumerator assigns splits to readers? Split-ids will have a lot of common characters, I'm not sure taking its hashcode remainder is the fairest way to assign fetcher threads...
+* Subject-filter is not a "natural" partitioning for a NATS stream. There are no guarantees of loosely uniform distribution of the stream's data across subject-filter. In this case it should not be unexpected for one single split to produce more data than another. We should probably turn off split-aware watermark generation or make it the configurable default and go back to global source watermarks (ReaderOutput). This is difficult with the current implementation since it extends `SourceReaderBase`. I really don't want to have to reimplement most of that class but for one small change...
