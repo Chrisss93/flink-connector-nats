@@ -44,17 +44,6 @@ DataStream<String> myStream = env.fromSource(
 );
 ```
 
-### Bounded mode
-
-The user may specify a simple rule by which the connector will stop consuming a NATS stream after some condition specified in the `connector.nats.source.enumerator.offsets.StopRule` interface. This sets the connector to Bounded-mode. **These stopping-rules are scoped to the entire NATS stream, not the source splits (NATS consumers)**. So in the situation where the connector is consuming a NATS stream via multiple splits, the first split which reaches the stopping rule will trigger all other splits to gracefully stop consuming from their respective NATS consumers. To achieve this, the following steps are performed:
-
-1. The `SourceReader` for the stopping split sends a custom `org.apache.flink.api.connector.source.SourceEvent` to the `SplitEnumerator` (source coordinator)
-2. The enumerator broadcasts that same source-event to the other source-readers.
-3. The other source-readers receive the source-event and use their `SplitFetcherManager` to send a special `org.apache.flink.connector.base.source.reader.splitreader.SplitChanges` to the source-readers' fetchers (`SplitReader`). This instructs the split-readers to mark all their splits as finished on the next fetch call.
-
-The motivation behind this extra communication between source components is to ensure that an idle split does not keep a bounded source open for longer than is necessary. Since the stopping-rule is globally scoped, this short-circuits the other splits to close immediately instead of staying running in the case where their NATS consumers are not sending new messages.
-
-
 ## Sink
 
 ### Usage
