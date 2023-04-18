@@ -1,7 +1,7 @@
 package com.github.chrisss93.connector.nats.source;
 
 import com.github.chrisss93.connector.nats.common.SubjectUtils;
-import com.github.chrisss93.connector.nats.source.reader.deserializer.NatsMessageDeserializationSchema;
+import com.github.chrisss93.connector.nats.source.reader.deserializer.NATSMessageDeserializationSchema;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.NeverStop;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.StartRule;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.StopRule;
@@ -28,7 +28,7 @@ public class JetStreamSourceBuilder<T> {
     private StopRule stopRule = new NeverStop();
     private StartRule startRule = StartRule.EARLIEST;
     private long startValue = -1;
-    private NatsMessageDeserializationSchema<T> deserializationSchema;
+    private NATSMessageDeserializationSchema<T> deserializationSchema;
     private final Set<ConsumerConfiguration.Builder> consumers = new HashSet<>();
     private ConsumerConfiguration.Builder defaultConsumer;
     private boolean discoverSplits = false;
@@ -63,7 +63,7 @@ public class JetStreamSourceBuilder<T> {
         return this;
     }
 
-    public JetStreamSourceBuilder<T> setDeserializationSchema(NatsMessageDeserializationSchema<T> schema) {
+    public JetStreamSourceBuilder<T> setDeserializationSchema(NATSMessageDeserializationSchema<T> schema) {
         this.deserializationSchema = schema;
         return this;
     }
