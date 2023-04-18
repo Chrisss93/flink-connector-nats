@@ -9,7 +9,7 @@ public class AckEachContext extends SingleStreamContext {
     }
 
     @Override
-    protected void sourceExtra(JetStreamSourceBuilder<String> builder) {
-        builder.ackEachMessage(true);
+    protected JetStreamSourceBuilder<String> sourceExtra(JetStreamSourceBuilder<String> builder) {
+        return builder.ackEachMessage(true);
     }
 }

@@ -119,11 +119,7 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
         }
 
         if (splitsChanges instanceof SplitsRemoval) {
-            if (splitsChanges.splits().isEmpty()) { // All splits should be force-closed.
-                subscriptions.keySet().forEach(k -> shutdownSubscription.put(k, true));
-            } else {
-                splitsChanges.splits().forEach(s -> shutdownSubscription.put(s.splitId(), true));
-            }
+            splitsChanges.splits().forEach(s -> shutdownSubscription.put(s.splitId(), true));
             readerMetrics.updateConsumerCount(subscriptions.size() - shutdownSubscription.size());
             return;
         }

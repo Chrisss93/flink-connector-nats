@@ -12,7 +12,7 @@ public class MultiThreadedFetcherContext extends SingleStreamContext {
     }
 
     @Override
-    protected void sourceExtra(JetStreamSourceBuilder<String> builder) {
-        builder.setNumFetchersPerReader(numFetcherThreads);
+    protected JetStreamSourceBuilder<String> sourceExtra(JetStreamSourceBuilder<String> builder) {
+        return builder.setNumFetchersPerReader(numFetcherThreads);
     }
 }

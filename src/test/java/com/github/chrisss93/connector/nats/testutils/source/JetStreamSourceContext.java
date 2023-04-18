@@ -29,7 +29,8 @@ public abstract class JetStreamSourceContext extends NATSTestContext
         super(runtime, prefix);
     }
 
-    protected void sourceExtra(JetStreamSourceBuilder<String> builder) {
+    protected JetStreamSourceBuilder<String> sourceExtra(JetStreamSourceBuilder<String> builder) {
+        return builder;
     }
 
     @Override
@@ -46,8 +47,7 @@ public abstract class JetStreamSourceContext extends NATSTestContext
                 .setStoppingRule(new NumMessageStop(BATCH_DATA_SIZE))
                 .setSplitDiscoveryInterval(-1);
         }
-        sourceExtra(builder);
-        return builder.build();
+        return sourceExtra(builder).build();
     }
 
     @Override
