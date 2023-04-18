@@ -1,16 +1,16 @@
 package com.github.chrisss93.connector.nats.source.reader;
 
-import com.github.chrisss93.connector.nats.source.reader.deserializer.NatsMessageDeserializationSchema;
+import com.github.chrisss93.connector.nats.source.reader.deserializer.NATSMessageDeserializationSchema;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplitState;
 import io.nats.client.Message;
 import org.apache.flink.api.connector.source.SourceOutput;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 
-public class NatsRecordEmitter<T> implements RecordEmitter<Message, T, JetStreamConsumerSplitState> {
-    private final NatsMessageDeserializationSchema<T> deserializationSchema;
+public class NATSRecordEmitter<T> implements RecordEmitter<Message, T, JetStreamConsumerSplitState> {
+    private final NATSMessageDeserializationSchema<T> deserializationSchema;
     private final boolean saveAcksInState;
 
-    public NatsRecordEmitter(NatsMessageDeserializationSchema<T> deserializationSchema, boolean saveAcksInState) {
+    public NATSRecordEmitter(NATSMessageDeserializationSchema<T> deserializationSchema, boolean saveAcksInState) {
         this.deserializationSchema = deserializationSchema;
         this.saveAcksInState = saveAcksInState;
     }

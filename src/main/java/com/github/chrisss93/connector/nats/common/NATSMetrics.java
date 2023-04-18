@@ -9,7 +9,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class NatsMetrics {
+public class NATSMetrics {
     private static final String OKS_RECEIVED = "OKsReceived";
     private static final String AVERAGE_BYTES_PER_WRITE = "AverageBytesPerWrite";
     private static final String HANDLED_EXCEPTIONS = "HandledExceptions";
@@ -63,7 +63,7 @@ public class NatsMetrics {
         implementation's extra info except through its toString method, so we have to go about arduously parsing
         a large string. I don't expect this will be stable across client library updates...
      */
-    public NatsMetrics(Connection connection) {
+    public NATSMetrics(Connection connection) {
         Map<String, Number> m = Arrays.stream(connection.getStatistics().toString().split("\\n"))
             .filter(s -> !s.startsWith("#") && s.length() > 0)
             .collect(Collectors.toMap(

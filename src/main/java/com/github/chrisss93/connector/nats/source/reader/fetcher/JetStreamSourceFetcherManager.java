@@ -1,7 +1,7 @@
 package com.github.chrisss93.connector.nats.source.reader.fetcher;
 
 
-import com.github.chrisss93.connector.nats.source.event.CompleteSplitsEvent;
+import com.github.chrisss93.connector.nats.source.event.RevokeSplitsEvent;
 import com.github.chrisss93.connector.nats.source.reader.JetStreamSplitReader;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import com.github.chrisss93.connector.nats.source.splits.SplitsRemoval;
@@ -78,15 +78,10 @@ public class JetStreamSourceFetcherManager extends SplitFetcherManager<Message, 
     }
      */
 
-    public void signalCloseAllFetchers(CompleteSplitsEvent event) {
+    public void signalSplitRevoke(RevokeSplitsEvent event) {
         fetchers.forEach( (id, fetcher) -> fetcher.enqueueTask((NoWakeSplitFetcherTask) () -> {
-
-            SplitsRemoval<JetStreamConsumerSplit> signal = event.allSplits()
-                ? new SplitsRemoval<>()
-                : makeSplitsRemoval(fetcher, event.getSplits());
-
-            if (event.allSplits() || signal.splits().size() > 0) {
-                fetcher.getSplitReader().handleSplitsChanges(signal);
+            if (!event.getSplits().isEmpty()) {
+                fetcher.getSplitReader().handleSplitsChanges(makeSplitsRemoval(fetcher, event.getSplits()));
             }
             return true;
         }));

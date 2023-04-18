@@ -2,7 +2,7 @@ package com.github.chrisss93.connector.nats.source;
 
 
 import com.github.chrisss93.connector.nats.source.reader.*;
-import com.github.chrisss93.connector.nats.source.reader.deserializer.NatsMessageDeserializationSchema;
+import com.github.chrisss93.connector.nats.source.reader.deserializer.NATSMessageDeserializationSchema;
 import com.github.chrisss93.connector.nats.source.reader.fetcher.JetStreamSourceFetcherManager;
 import com.github.chrisss93.connector.nats.source.splits.AllAcksSplitState;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
@@ -30,7 +30,7 @@ public class JetStreamSource<OUT>
     implements Source<OUT, JetStreamConsumerSplit, JetStreamSourceEnumState>, ResultTypeQueryable<OUT> {
 
     private final Properties connectProps;
-    private final NatsMessageDeserializationSchema<OUT> deserializationSchema;
+    private final NATSMessageDeserializationSchema<OUT> deserializationSchema;
     private final String stream;
     private final Set<NATSConsumerConfig> consumerConfigs;
     private final StopRule stopRule;
@@ -41,7 +41,7 @@ public class JetStreamSource<OUT>
     private final int numFetcherThreads;
 
     public JetStreamSource(Properties connectProps,
-                           NatsMessageDeserializationSchema<OUT> deserializationSchema,
+                           NATSMessageDeserializationSchema<OUT> deserializationSchema,
                            String stream,
                            Set<NATSConsumerConfig> consumerConfigs,
                            StopRule stopRule,
@@ -83,7 +83,7 @@ public class JetStreamSource<OUT>
         return new JetStreamSourceReader<>(
             elementsQueue,
             new JetStreamSourceFetcherManager(numFetcherThreads, elementsQueue, splitReaderSupplier),
-            new NatsRecordEmitter<>(deserializationSchema, ackMessageOnCheckpoint),
+            new NATSRecordEmitter<>(deserializationSchema, ackMessageOnCheckpoint),
             ackEachMessage ? AllAcksSplitState::new : LastAcksSplitState::new,
             ackEachMessage,
             readerContext

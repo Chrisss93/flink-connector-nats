@@ -1,7 +1,8 @@
 package com.github.chrisss93.connector.nats.source.enumerator;
 
 import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
-import com.github.chrisss93.connector.nats.source.event.CompleteSplitsEvent;
+import com.github.chrisss93.connector.nats.source.event.FinishedSplitsEvent;
+import com.github.chrisss93.connector.nats.source.event.RevokeSplitsEvent;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import io.nats.client.*;
 import io.nats.client.api.ConsumerConfiguration;
@@ -17,7 +18,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.commons.lang3.RandomStringUtils.random;
-import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 
 /**
  * Given a parallelism and number of splits, this enumerator assigns splits evenly across readers with no special
@@ -36,6 +36,7 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
 
     private final Map<Integer, Set<JetStreamConsumerSplit>> assignedSplits = new HashMap<>();
     private final Map<Integer, Set<JetStreamConsumerSplit>> pendingSplitAssignments = new HashMap<>();
+    private final Set<String> finishedSplits = new HashSet<>();
 
     public JetStreamSourceEnumerator(
         Properties connectProps,
@@ -82,6 +83,9 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
             context.callAsync(this::makeOrLookupSplits, this::assignAllSplits);
         }
         if (discoverSplits && splitDiscoveryIntervalMs > 0) {
+            LOG.info("Starting JetStreamSourceEnumerator for stream {} with subject-filter discovery " +
+                    "interval of {} ms.", streamName, splitDiscoveryIntervalMs
+            );
             context.callAsync(
                 this::makeOrLookupSplits,
                 this::assignAllSplits,
@@ -161,9 +165,6 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
             checkReaderRegistered(readerId);
             Set<JetStreamConsumerSplit> splits = pendingSplitAssignments.remove(readerId);
             if (splits != null) {
-                LOG.info("Reader {} will be assigned splits: {}", readerId,
-                    splits.stream().map(JetStreamConsumerSplit::splitId).collect(Collectors.toList())
-                );
                 incrementalAssignments.computeIfAbsent(readerId, k -> new ArrayList<>()).addAll(splits);
                 assignedSplits.computeIfAbsent(readerId, k -> new HashSet<>()).addAll(splits);
             }
@@ -189,9 +190,20 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
             Set<JetStreamConsumerSplit> revokes = Sets.difference(e.getValue(), new HashSet<>(splits));
             if (!revokes.isEmpty()) {
                 LOG.info("Revoking outdated splits: {} from reader {}", revokes, e.getKey());
-                context.sendEventToSourceReader(e.getKey(), new CompleteSplitsEvent(revokes));
+                context.sendEventToSourceReader(e.getKey(), new RevokeSplitsEvent(revokes));
             }
         }
+    }
+
+    @Override
+    public void handleSourceEvent(int subtaskId, SourceEvent sourceEvent) {
+        if (!(sourceEvent instanceof FinishedSplitsEvent)) {
+            throw new UnsupportedOperationException(
+                String.format("Reader %d emitted source event %s, which is not supported.", subtaskId, sourceEvent)
+            );
+        }
+        Set<String> finished = ((FinishedSplitsEvent) sourceEvent).getSplitIds();
+        assignedSplits.get(subtaskId).removeIf(x -> finished.contains(x.splitId()));
     }
 
     @Override
@@ -212,20 +224,5 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
             throw new IllegalStateException(
                 String.format("Reader %d is not registered to source coordinator", readerId));
         }
-    }
-
-    @Override
-    public void handleSourceEvent(int subtaskId, SourceEvent sourceEvent) {
-        if (boundedness != Boundedness.BOUNDED) {
-            return;
-        } else if (!(sourceEvent instanceof CompleteSplitsEvent)) {
-            throw new UnsupportedOperationException(
-                String.format("source event %s from reader %s is not supported", sourceEvent, subtaskId)
-            );
-        }
-        LOG.info("Closing all readers since reader {} has satisfied its stopping rule.", subtaskId);
-        context.registeredReaders().forEach((k, v) -> {
-            if (k != subtaskId) context.sendEventToSourceReader(k, new CompleteSplitsEvent());
-        });
     }
 }

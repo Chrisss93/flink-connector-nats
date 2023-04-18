@@ -95,6 +95,7 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                         LOG.warn("NATS did not confirm message acks. Trying again at next checkpoint.");
                     }
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     LOG.warn("NATS did not confirm message acks. Trying again at next checkpoint.");
                 }
             }

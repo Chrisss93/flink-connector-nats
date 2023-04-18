@@ -1,16 +1,19 @@
 package com.github.chrisss93.connector.nats.source;
 
+import com.github.chrisss93.connector.nats.testutils.NATSTestContext;
 import com.github.chrisss93.connector.nats.testutils.NatsTestContextFactory;
 import com.github.chrisss93.connector.nats.testutils.NatsTestEnvironment;
-import com.github.chrisss93.connector.nats.testutils.source.*;
-import com.github.chrisss93.connector.nats.testutils.source.cases.MultiFilterStreamContext;
+import com.github.chrisss93.connector.nats.testutils.source.JetStreamSourceContext;
+import com.github.chrisss93.connector.nats.testutils.source.cases.AckEachContext;
 import com.github.chrisss93.connector.nats.testutils.source.cases.MultiThreadedFetcherContext;
-import com.github.chrisss93.connector.nats.testutils.source.cases.SingleFilterStreamContext;
-import org.apache.commons.math3.util.Precision;
-import org.apache.flink.api.common.JobStatus;
+import com.github.chrisss93.connector.nats.testutils.source.cases.SingleStreamContext;
+import io.nats.client.api.StreamConfiguration;
+import io.nats.client.api.StreamInfoOptions;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.connector.source.Boundedness;
-import org.apache.flink.configuration.Configuration;
+import org.apache.flink.api.connector.source.Source;
 import org.apache.flink.connector.testframe.environment.MiniClusterTestEnvironment;
 import org.apache.flink.connector.testframe.environment.TestEnvironment;
 import org.apache.flink.connector.testframe.environment.TestEnvironmentSettings;
@@ -21,28 +24,31 @@ import org.apache.flink.connector.testframe.junit.annotations.TestEnv;
 import org.apache.flink.connector.testframe.junit.annotations.TestExternalSystem;
 import org.apache.flink.connector.testframe.junit.annotations.TestSemantics;
 import org.apache.flink.connector.testframe.testsuites.SourceTestSuiteBase;
-import org.apache.flink.connector.testframe.utils.MetricQuerier;
+import org.apache.flink.connector.testframe.utils.CollectIteratorAssertions;
 import org.apache.flink.core.execution.JobClient;
-import org.apache.flink.runtime.execution.ExecutionState;
-import org.apache.flink.runtime.metrics.MetricNames;
-import org.apache.flink.runtime.rest.RestClient;
-import org.apache.flink.runtime.rest.messages.job.JobDetailsInfo;
 import org.apache.flink.streaming.api.CheckpointingMode;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.DataStreamSource;
+import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.DiscardingSink;
-import org.apache.flink.util.function.SupplierWithException;
+import org.apache.flink.streaming.api.operators.collect.CollectResultIterator;
+import org.apache.flink.streaming.api.operators.collect.CollectSinkOperator;
+import org.apache.flink.streaming.api.operators.collect.CollectSinkOperatorFactory;
+import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
+import org.apache.flink.util.CloseableIterator;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.TestTemplate;
 
-import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
-import static org.apache.flink.connector.testframe.utils.MetricQuerier.getJobDetails;
-import static org.apache.flink.runtime.testutils.CommonTestUtils.terminateJob;
-import static org.apache.flink.runtime.testutils.CommonTestUtils.waitForJobStatus;
-import static org.apache.flink.runtime.testutils.CommonTestUtils.waitUntilCondition;
+import static java.util.Collections.singletonList;
+import static org.apache.flink.connector.testframe.utils.ConnectorTestConstants.DEFAULT_COLLECT_DATA_TIMEOUT;
 import static org.apache.flink.streaming.api.CheckpointingMode.EXACTLY_ONCE;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class JetStreamSourceITCase extends SourceTestSuiteBase<String> {
 
@@ -64,122 +70,139 @@ public class JetStreamSourceITCase extends SourceTestSuiteBase<String> {
     // so test cases will be invoked using these external contexts.
     @SuppressWarnings("unused")
     @TestContext
-    NatsTestContextFactory<JetStreamSourceContext> singleFilterStream =
-        new NatsTestContextFactory<>(natsEnv, SingleFilterStreamContext::new);
+    NatsTestContextFactory<JetStreamSourceContext> singleStream =
+        new NatsTestContextFactory<>(natsEnv, SingleStreamContext::new);
+
 
     @SuppressWarnings("unused")
     @TestContext
-    NatsTestContextFactory<JetStreamSourceContext> multiFilterStream =
-        new NatsTestContextFactory<>(natsEnv, (env, testName) -> new MultiFilterStreamContext(env, testName, 4));
+    NatsTestContextFactory<JetStreamSourceContext> ackEach =
+        new NatsTestContextFactory<>(natsEnv, AckEachContext::new);
 
     @SuppressWarnings("unused")
     @TestContext
     NatsTestContextFactory<JetStreamSourceContext> multiThreadedFetcher =
         new NatsTestContextFactory<>(natsEnv, (env, testName) -> new MultiThreadedFetcherContext(env, testName, 2));
 
-    /**
-        Same as the existing implementation except that job metrics will be queried once all job tasks are
-        running OR finished. This is needed here because not all generated split data by the test-contexts will be
-        interpreted as unique splits by the source reader, so jobs may correctly have fewer running tasks than the
-        original test expects due to idle parallelism.
-     **/
-    @Override
+
     @TestTemplate
-    @DisplayName("Test source metrics")
-    public void testSourceMetrics(
+    @DisplayName("Dynamic split discovery")
+    public void discoverAddRemoveSplits(
         TestEnvironment testEnv,
         DataStreamSourceExternalContext<String> externalContext,
         CheckpointingMode semantic) throws Exception {
 
-        TestingSourceSettings sourceSettings = TestingSourceSettings.builder()
+        // Step 1: Preparation
+        TestingSourceSettings sourceSettings =
+            TestingSourceSettings.builder()
                 .setBoundedness(Boundedness.CONTINUOUS_UNBOUNDED)
                 .setCheckpointingMode(semantic)
                 .build();
-        TestEnvironmentSettings envOptions = TestEnvironmentSettings.builder()
+        TestEnvironmentSettings envOptions =
+            TestEnvironmentSettings.builder()
                 .setConnectorJarPaths(externalContext.getConnectorJarPaths())
                 .build();
+        Source<String, ?, ?> source = tryCreateSource(externalContext, sourceSettings);
 
-        final int splitNumber = 4;
-        final List<List<String>> testRecordCollections = new ArrayList<>();
+        // Step 2: Write test data to external system
+        int splitNumber = 4;
+        List<List<String>> testRecordsLists = new ArrayList<>();
         for (int i = 0; i < splitNumber; i++) {
-            testRecordCollections.add(generateAndWriteTestData(i, externalContext, sourceSettings));
+            testRecordsLists.add(generateAndWriteTestData(i, externalContext, sourceSettings));
         }
 
-        // make sure use different names when executes multi times
-        String sourceName = "metricTestSource" + testRecordCollections.hashCode();
-        final StreamExecutionEnvironment env = testEnv.createExecutionEnvironment(envOptions);
-        env
-            .fromSource(
-                tryCreateSource(externalContext, sourceSettings),
-                WatermarkStrategy.noWatermarks(),
-                sourceName)
-            .setParallelism(splitNumber)
-            .addSink(new DiscardingSink<>());
-        final JobClient jobClient = env.executeAsync("Metrics Test");
+        // Step 3: Build and execute Flink job
+        StreamExecutionEnvironment execEnv = testEnv.createExecutionEnvironment(envOptions);
+        execEnv.setRestartStrategy(RestartStrategies.noRestart());
+        DataStreamSource<String> stream =
+            execEnv.fromSource(source, WatermarkStrategy.noWatermarks(), "Tested Source")
+                .setParallelism(splitNumber);
+        SinkIterator iteratorBuilder = SinkIterator.apply(stream);
+        JobClient jobClient = submitJob(execEnv, "Source Split Discovery");
 
-        final MetricQuerier queryRestClient = new MetricQuerier(new Configuration());
-        final ExecutorService executorService = Executors.newCachedThreadPool();
+        // Step 4: Validate test data
+        try (CloseableIterator<String> resultIterator = iteratorBuilder.build(jobClient)) {
+            // Check initial test result
+            int testRecordsSize = testRecordsLists.stream().mapToInt(List::size).sum();
+            checkResultWithSemantic(resultIterator, testRecordsLists, semantic, testRecordsSize);
 
-        try {
-            waitForAllTaskState( // instead of waitForAllTaskRunning
-                Arrays.asList(ExecutionState.RUNNING, ExecutionState.FINISHED),
-                () -> getJobDetails(
-                        new RestClient(new Configuration(), executorService),
-                        testEnv.getRestEndpoint(),
-                        jobClient.getJobID()));
+            // Step 5: Replace one of the NATS stream's subject-filters created by the generated split data
+            StreamConfiguration config = natsEnv.client()
+                .jetStreamManagement()
+                .getStreamInfo(((NATSTestContext) externalContext).getStreamName(), StreamInfoOptions.allSubjects())
+                .getConfiguration();
 
-            waitUntilCondition( // Compare metrics
-                () -> {
-                    try {
-                        Double sumNumRecordsIn = queryRestClient.getAggregatedMetricsByRestAPI(
-                            testEnv.getRestEndpoint(),
-                            jobClient.getJobID(),
-                            sourceName,
-                            MetricNames.IO_NUM_RECORDS_IN,
-                            null);
-                        return Precision.equals(getTestDataSize(testRecordCollections), sumNumRecordsIn);
-                    } catch(Exception e) {
-                        return false;
-                    }
-                });
-        } finally {
-            // Clean up
-            executorService.shutdown();
-            killJob(jobClient);
-        }
-    }
+            List<String> subjects = config.getSubjects();
+            Assertions.assertThat(subjects).hasSize(splitNumber);
+            String droppedSubject = subjects.remove(0);
+            String newSubject = droppedSubject + "-replacement";
+            natsEnv.client().jetStreamManagement().updateStream(
+                StreamConfiguration.builder(config).addSubjects(newSubject).build()
+            );
 
-    private static void waitForAllTaskState(
-        List<ExecutionState> goodStates,
-        SupplierWithException<JobDetailsInfo, Exception> jobDetailsSupplier) throws Exception {
-
-        waitUntilCondition(
-            () -> {
-                final JobDetailsInfo jobDetailsInfo = jobDetailsSupplier.get();
-                final Collection<JobDetailsInfo.JobVertexDetailsInfo> vertexInfos =
-                    jobDetailsInfo.getJobVertexInfos();
-                if (vertexInfos.size() == 0) {
-                    return false;
-                }
-                for (JobDetailsInfo.JobVertexDetailsInfo vertexInfo : vertexInfos) {
-                    final int numGoodTasks =
-                        vertexInfo.getTasksPerState().entrySet()
-                            .stream()
-                            .filter(e -> goodStates.contains(e.getKey()))
-                            .mapToInt(Map.Entry::getValue)
-                            .sum();
-
-                    if (numGoodTasks != vertexInfo.getParallelism()) {
-                        return false;
-                    }
-                }
-                return true;
+            // Publish messages to the dropped subject and new subject
+            int numNewRecords = 10;
+            List<String> newRecords = new ArrayList<>(numNewRecords);
+            for (byte i = 0; i < numNewRecords; i++) {
+                String message = (newSubject + " - " + i);
+                newRecords.add(message);
+                natsEnv.client().publish(newSubject, message.getBytes());
+                natsEnv.client().publish(droppedSubject, (droppedSubject + " - " + i).getBytes());
             }
-        );
+
+            // Expect data for the new subject and none from the dropped subject
+            checkResultWithSemantic(resultIterator, singletonList(newRecords),semantic, newRecords.size());
+        }
     }
 
-    private void killJob(JobClient jobClient) throws Exception {
-        terminateJob(jobClient);
-        waitForJobStatus(jobClient, Collections.singletonList(JobStatus.CANCELED));
+
+    private void checkResultWithSemantic(
+        CloseableIterator<String> resultIterator,
+        List<List<String>> testData,
+        CheckpointingMode semantic,
+        Integer limit) {
+
+        if (limit != null) {
+            assertThat(
+                CompletableFuture.supplyAsync(
+                    () -> {
+                        CollectIteratorAssertions.assertThat(resultIterator)
+                            .withNumRecordsLimit(limit)
+                            .matchesRecordsFromSource(testData, semantic);
+                        return true;
+                    }))
+                .succeedsWithin(DEFAULT_COLLECT_DATA_TIMEOUT);
+        } else {
+            CollectIteratorAssertions.assertThat(resultIterator)
+                .matchesRecordsFromSource(testData, semantic);
+        }
+    }
+
+    static class SinkIterator extends CollectIteratorBuilder<String> {
+        protected static SinkIterator apply(DataStream<String> stream) {
+            TypeSerializer<String> serializer =
+                stream.getType().createSerializer(stream.getExecutionConfig());
+            String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
+            CollectSinkOperatorFactory<String> factory =
+                new CollectSinkOperatorFactory<>(serializer, accumulatorName);
+            CollectSinkOperator<String> operator = (CollectSinkOperator<String>) factory.getOperator();
+            CollectStreamSink<String> sink = new CollectStreamSink<>(stream, factory);
+            sink.name("Data stream collect sink");
+            stream.getExecutionEnvironment().addOperator(sink.getTransformation());
+            return new SinkIterator(
+                operator,
+                serializer,
+                accumulatorName,
+                stream.getExecutionEnvironment().getCheckpointConfig());
+        }
+        public CollectResultIterator<String> build(JobClient jobClient) {
+            return super.build(jobClient);
+        }
+        protected SinkIterator(CollectSinkOperator<String> operator,
+                               TypeSerializer<String> serializer,
+                               String accumulatorName,
+                               CheckpointConfig checkpointConfig) {
+            super(operator, serializer, accumulatorName, checkpointConfig);
+        }
     }
 }

@@ -2,7 +2,7 @@ package com.github.chrisss93.connector.nats.testutils.sink;
 
 import com.github.chrisss93.connector.nats.sink.JetStreamSink;
 import com.github.chrisss93.connector.nats.sink.writer.serializer.StringSerializer;
-import com.github.chrisss93.connector.nats.testutils.NatsTestContext;
+import com.github.chrisss93.connector.nats.testutils.NATSTestContext;
 import com.github.chrisss93.connector.nats.testutils.NatsTestEnvironment;
 import io.nats.client.Dispatcher;
 import io.nats.client.Options;
@@ -13,15 +13,12 @@ import org.apache.flink.connector.testframe.external.sink.TestingSinkSettings;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 
-public abstract class JetStreamSinkContext extends NatsTestContext
+public abstract class JetStreamSinkContext extends NATSTestContext
     implements DataStreamSinkV2ExternalContext<String> {
 
     private static final int RECORD_SIZE_UPPER_BOUND = 300;
@@ -38,6 +35,9 @@ public abstract class JetStreamSinkContext extends NatsTestContext
 
     protected void sinkExtra(Properties props) {
     }
+
+    protected abstract Collection<String> streamSubjectFilters();
+    protected abstract String testDataToSubject(String testData);
 
     @Override
     public Sink<String> createSink(TestingSinkSettings sinkSettings) {

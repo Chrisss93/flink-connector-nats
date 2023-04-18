@@ -1,6 +1,7 @@
 package com.github.chrisss93.connector.nats.source.reader;
 
-import com.github.chrisss93.connector.nats.source.event.CompleteSplitsEvent;
+import com.github.chrisss93.connector.nats.source.event.FinishedSplitsEvent;
+import com.github.chrisss93.connector.nats.source.event.RevokeSplitsEvent;
 import com.github.chrisss93.connector.nats.source.reader.fetcher.JetStreamSourceFetcherManager;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplitState;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
@@ -44,7 +45,7 @@ public class JetStreamSourceReader<T>
     private final SortedMap<Long, Map<String, Set<String>>> messagesToAck;
     Function<JetStreamConsumerSplit, JetStreamConsumerSplitState> initSplit;
     private final boolean doubleAck;
-    private boolean closedByAnotherReader = false;
+    private boolean receivedRevokeSplitsEvent = false;
 
     public JetStreamSourceReader(
         FutureCompletingBlockingQueue<RecordsWithSplitIds<Message>> elementsQueue,
@@ -120,11 +121,10 @@ public class JetStreamSourceReader<T>
 
     @Override
     protected void onSplitFinished(Map<String, JetStreamConsumerSplitState> finishedSplitIds) {
-        LOG.info("Completed splits: {}", finishedSplitIds.keySet());
-        context.sendSplitRequest();
-        if (!closedByAnotherReader) {
-            context.sendSourceEventToCoordinator(new CompleteSplitsEvent());
+        if (receivedRevokeSplitsEvent) {
+            context.sendSourceEventToCoordinator(new FinishedSplitsEvent(finishedSplitIds.keySet()));
         }
+        context.sendSplitRequest();
     }
 
     @Override
@@ -134,12 +134,12 @@ public class JetStreamSourceReader<T>
 
     @Override
     public void handleSourceEvents(SourceEvent sourceEvent) {
-        if (!(sourceEvent instanceof CompleteSplitsEvent)) {
-            throw new UnsupportedOperationException(String.format("source event %s is not supported", sourceEvent));
+        receivedRevokeSplitsEvent = sourceEvent instanceof RevokeSplitsEvent;
+        if (!receivedRevokeSplitsEvent) {
+            throw new UnsupportedOperationException(String.format("source event: %s is not supported", sourceEvent));
         }
-        CompleteSplitsEvent splitsToComplete = (CompleteSplitsEvent) sourceEvent;
-        closedByAnotherReader = (splitsToComplete.allSplits());
-        ((JetStreamSourceFetcherManager) splitFetcherManager).signalCloseAllFetchers(splitsToComplete);
+        RevokeSplitsEvent revokeEvent = (RevokeSplitsEvent) sourceEvent;
+        ((JetStreamSourceFetcherManager) splitFetcherManager).signalSplitRevoke(revokeEvent);
     }
 
     @VisibleForTesting

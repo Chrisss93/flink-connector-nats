@@ -1,6 +1,6 @@
 package com.github.chrisss93.connector.nats.sink.metrics;
 
-import com.github.chrisss93.connector.nats.common.NatsMetrics;
+import com.github.chrisss93.connector.nats.common.NATSMetrics;
 import io.nats.client.Connection;
 import io.nats.client.Statistics;
 import io.nats.client.api.PublishAck;
@@ -51,7 +51,7 @@ public class JetStreamSinkWriterMetrics {
             internal queue in preparation for being published.
          */
         if (advanced) {
-            NatsMetrics metrics = new NatsMetrics(connection);
+            NATSMetrics metrics = new NATSMetrics(connection);
             metrics.addToMetricGroup(statsGroup);
             updateBytesOut(metrics.getBytesIn());
             updateMessagesOut(metrics.getMessagesIn());

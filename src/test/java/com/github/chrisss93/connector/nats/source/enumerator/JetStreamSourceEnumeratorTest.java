@@ -1,7 +1,7 @@
 package com.github.chrisss93.connector.nats.source.enumerator;
 
 import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
-import com.github.chrisss93.connector.nats.source.event.CompleteSplitsEvent;
+import com.github.chrisss93.connector.nats.source.event.RevokeSplitsEvent;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import com.github.chrisss93.connector.nats.testutils.NatsTestSuiteBase;
 import io.nats.client.Options;
@@ -9,7 +9,6 @@ import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.StreamConfiguration;
 import org.apache.flink.api.connector.source.*;
 import org.apache.flink.api.connector.source.mocks.MockSplitEnumeratorContext;
-import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -213,13 +212,13 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
         assertThat(events).hasSize(2);
 
         assertThat(events.get(0))
-            .extracting(e -> ((CompleteSplitsEvent) e).getSplits().stream()
+            .extracting(e -> ((RevokeSplitsEvent) e).getSplits().stream()
                 .map(s -> s.getConfig().getFilterSubject())
                 .collect(Collectors.toList()))
             .isEqualTo(Collections.singletonList("yellow"));
 
         assertThat(events.get(1))
-            .extracting(e -> ((CompleteSplitsEvent) e).getSplits().stream()
+            .extracting(e -> ((RevokeSplitsEvent) e).getSplits().stream()
                 .map(s -> s.getConfig().getFilterSubject())
                 .collect(Collectors.toList()))
             .isEqualTo(Collections.singletonList("red"));
