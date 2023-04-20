@@ -1,6 +1,6 @@
 # Apache Flink NATS Connector
 
-This repository provides a Flink Source and Sink Connector for a JetStream-enabled NATS cluster. These connectors use the new [FLIP-27](https://cwiki.apache.org/confluence/display/FLINK/FLIP-27%3A+Refactor+Source+Interface) Source API and [FLIP-143](https://cwiki.apache.org/confluence/display/FLINK/FLIP-143%3A+Unified+Sink+API) Unified Sink API for bounded and unbounded streams.
+This repository provides a Flink Source and Sink Connector for a JetStream-enabled NATS cluster. These connectors use the new [FLIP-27](https://cwiki.apache.org/confluence/display/FLINK/FLIP-27%3A+Refactor+Source+Interface) Source API and [FLIP-143](https://cwiki.apache.org/confluence/display/FLINK/FLIP-143%3A+Unified+Sink+API) Unified Sink API for bounded and unbounded streams, as well as a Table API implementation.
 
 It tries to follow a similar structure to the [flink-connector-kafka](https://github.com/apache/flink-connector-kafka) and [flink-connector-pulsar](https://github.com/apache/flink-connector-pulsar) projects.
 
@@ -13,7 +13,7 @@ JetStream enables source replay, but NATS still lacks transactions. Therefore, t
 - [x] Unit+e2e tests for source+sink connector
 - [x] Flink metrics and telemetry for source+sink connector
 - [x] Periodic, dynamic split discovery for source connector
-- [ ] Table API
+- [x] Table API
 - [ ] Publish artifacts
 
 ## Source
@@ -68,7 +68,72 @@ ds
     .uid("NATS Sink")
 ```
 
-The example above will try to send data to the subject: `bar`. If the NATS server doesn't have any stream capturing that subject in its subject-filter (or any active consumers on that subject), the messages will be rejected and the job will fail.
+The example above will try to send data to the subject: `bar`. If the NATS server doesn't have any stream capturing that subject in its subject-filter (or any active subscribers), the published messages will be rejected and the job will fail.
+
+## Table/SQL
+
+A Table API factory has been implemented for a `ScanTableSource` and `DynamicTableSink`. `INSERT_ONLY` is the only supported changelog mode. An upsert/delete style logic is possible, but that configuration must be done on the NATS side and for now will remain outside of Flink's Table API purview.
+
+The following metadata fields are available:
+
+| Name        | Type                          | Readable | Writeable |
+|-------------|-------------------------------|----------|-----------|
+| headers     | MAP<VARCHAR, ARRAY\<VARCHAR>> | &check;  | &check;   |
+| subject     | VARCHAR                       | &check;  | &check;   |
+| stream      | VARCHAR                       | &check;  | &cross;   |
+| consumer    | VARCHAR                       | &check;  | &cross;   |
+| domain      | VARCHAR                       | &check;  | &cross;   |
+| delivered   | BIGINT                        | &check;  | &cross;   |
+| streamSeq   | BIGINT                        | &check;  | &cross;   |
+| consumerSeq | BIGINT                        | &check;  | &cross;   |
+| timestamp   | TIMESTAMP(9)                  | &check;  | &cross;   |
+| pending     | BIGINT                        | &check;  | &cross;   |
+
+The Table Source supports limit push-down, watermark push-down and a small degree of filter push-down. Importantly here, the field-name: `subject` (case-sensitive) is reserved for the corresponding metadata field and it will be pushed-down if an expression with it is present in the `WHERE` clause of a table query.
+
+For table sinks (ie. `INSERT` statements), if the `subject` metadata field is not present in the table, a static setting `sink.subject` can be configured to specify the NATS subject that every inserted row will be written to on the NATS server. As with the DataStream Sink API, the  subject (specified either statically with config-options or dynamically with the writeable metadata column) must have a subscriber on the NATS server or else be captured by a NATS stream. Otherwise, the insert statement will fail.
+
+### Usage
+
+```sql
+CREATE TABLE foo_input (
+  name VARCHAR,
+  age INT,
+  subject VARCHAR METADATA,
+  headers MAP<VARCHAR, ARRAY<VARCHAR>> METADATA,
+  timestamp TIMESTAMP(9) METADATA VIRTUAL
+) WITH (
+  "connector" = "nats",
+  "io.nats.client.servers" = "nats://...",
+  "stream" = "foo",
+  "format" = "json"
+);
+
+CREATE TABLE bar_output (
+  short_name VARCHAR,
+  DOB INT,
+  subject VARCHAR METADATA
+  headers MAP<VARCHAR, ARRAY<VARCHAR>> METADATA
+) WITH (
+  "connector" = "nats",
+  "io.nats.client.servers" = "nats://...",
+  "format" = "json"
+);
+
+INSERT INTO bar_output
+SELECT
+  UPPER(SUBSTRING(CHAR_LENGTH(name) - 3, name)),
+  2023 - age,
+  "bar." || SUBSTR(UPPER(name), 0, 1),
+  MAP[
+    "version", ARRAY["0.1", "0.1-SNAPSHOT"],
+    "traceId", headers["traceId"]
+  ]
+FROM foo_input
+WHERE subject IN ("a", "b") AND age >= 18
+LIMIT 10;
+```
+
 
 ## TODO
 

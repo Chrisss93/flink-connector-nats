@@ -1,5 +1,6 @@
 package com.github.chrisss93.connector.nats.source.enumerator;
 
+import com.github.chrisss93.connector.nats.common.SubjectUtils;
 import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
 import com.github.chrisss93.connector.nats.source.event.FinishedSplitsEvent;
 import com.github.chrisss93.connector.nats.source.event.RevokeSplitsEvent;
@@ -16,8 +17,6 @@ import javax.annotation.Nullable;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.apache.commons.lang3.RandomStringUtils.random;
 
 /**
  * Given a parallelism and number of splits, this enumerator assigns splits evenly across readers with no special
@@ -127,8 +126,7 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
                     .getSubjects()
                     .stream()
                     .map(s -> {
-                        String fullName = prefix + "-" +
-                            random(5, 0, 0, true, false, null, new Random(s.hashCode()));
+                        String fullName = SubjectUtils.consumerName(prefix, s);
                         return config.filterSubject(s).name(fullName).durable(fullName);
                     });
             }
