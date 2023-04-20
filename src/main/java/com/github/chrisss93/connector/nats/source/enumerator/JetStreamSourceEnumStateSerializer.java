@@ -3,7 +3,6 @@ package com.github.chrisss93.connector.nats.source.enumerator;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplitSerializer;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
-import org.apache.flink.util.FlinkRuntimeException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
