@@ -196,7 +196,7 @@ public class JetStreamSourceEnumeratorTest extends NatsTestSuiteBase {
 
         assertThat(assignment)
             .hasSize(1)
-            .extracting(x -> x.get(0).stream()
+            .extracting(x -> x.get(1).stream()
                 .map(y -> y.getConfig().getFilterSubject())
                 .collect(Collectors.toList()))
             .isEqualTo(Collections.singletonList("orange"));
