@@ -74,6 +74,7 @@ public class JetStreamWriterTest extends NatsTestSuiteBase {
         assertThat(writer.getPendingMessages()).isEqualTo(1);
 
         // Verify that message has made it to NATS
+        Thread.sleep(100L);
         assertThat(
             client().jetStreamManagement().getStreamInfo(streamName).getStreamState().getLastSequence()
         ).isEqualTo(1);

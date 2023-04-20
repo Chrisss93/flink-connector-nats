@@ -43,7 +43,7 @@ public class JetStreamSourceReader<T>
 
     private static final Logger LOG = LoggerFactory.getLogger(JetStreamSourceReader.class);
     private final SortedMap<Long, Map<String, Set<String>>> messagesToAck;
-    Function<JetStreamConsumerSplit, JetStreamConsumerSplitState> initSplit;
+    private final Function<JetStreamConsumerSplit, JetStreamConsumerSplitState> initSplit;
     private final boolean doubleAck;
     private boolean receivedRevokeSplitsEvent = false;
 

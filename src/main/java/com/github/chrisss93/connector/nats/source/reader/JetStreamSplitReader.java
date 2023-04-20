@@ -91,7 +91,7 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                 try {
                     Message reply = connection.request(r, AckType.AckAck.bytes, Duration.ofSeconds(1L));
                     readerMetrics.updateAcks(reply != null);
-                    if (reply != null) {
+                    if (reply == null) {
                         LOG.warn("NATS did not confirm message acks. Trying again at next checkpoint.");
                     }
                 } catch (InterruptedException e) {
