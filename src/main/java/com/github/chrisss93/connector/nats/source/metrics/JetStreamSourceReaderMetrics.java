@@ -1,6 +1,6 @@
 package com.github.chrisss93.connector.nats.source.metrics;
 
-import com.github.chrisss93.connector.nats.common.NatsMetrics;
+import com.github.chrisss93.connector.nats.common.NATSMetrics;
 import io.nats.client.Connection;
 import io.nats.client.Statistics;
 import org.apache.flink.metrics.MetricGroup;
@@ -48,7 +48,7 @@ public class JetStreamSourceReaderMetrics {
 
     public void updateMetrics() {
         if (advanced) {
-            NatsMetrics metrics = new NatsMetrics(connection);
+            NATSMetrics metrics = new NATSMetrics(connection);
             metrics.addToMetricGroup(statsGroup);
             updateBytesIn(metrics.getBytesIn());
 //            updateMessagesIn(metrics.getMessagesIn() - metrics.getPingsSent() - metrics.getRequestsSent());

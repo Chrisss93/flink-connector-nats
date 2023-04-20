@@ -4,7 +4,7 @@ import io.nats.client.Message;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
 
-public class StringDeserializer implements NatsMessageDeserializationSchema<String> {
+public class StringDeserializer implements NATSMessageDeserializationSchema<String> {
     public String deserialize(Message message) {
         return new String(message.getData());
     }

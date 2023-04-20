@@ -91,6 +91,18 @@ public class JetStreamConsumerSplit implements SourceSplit {
     }
 
     @Override
+    public int hashCode() {
+        ConsumerConfiguration conf = this.getConfig();
+        return Objects.hash(this.stream, this.pendingAcks, conf.getDurable(), conf.getName(), conf.getFilterSubject(),
+            conf.getDeliverPolicy(), conf.getDeliverGroup(), conf.getDeliverSubject(), conf.getAckWait(),
+            conf.getBackoff(), conf.getDescription(), conf.getIdleHeartbeat(), conf.getInactiveThreshold(),
+            conf.getSampleFrequency(), conf.getReplayPolicy(), conf.getMaxExpires(), conf.getStartSequence(),
+            conf.getStartTime(), conf.getMaxPullWaiting(), conf.getMaxAckPending(), conf.getMaxBatch(),
+            conf.getMaxBytes(), conf.getMaxDeliver(),conf.getMaxPullWaiting(), conf.getNumReplicas(),
+            conf.getRateLimit());
+    }
+
+    @Override
     public boolean equals(Object obj) {
         if (obj == this) {
             return true;
@@ -118,13 +130,13 @@ public class JetStreamConsumerSplit implements SourceSplit {
             Objects.equals(myConfig.getSampleFrequency(), otherConfig.getSampleFrequency()) &&
             Objects.equals(myConfig.getReplayPolicy(), otherConfig.getReplayPolicy()) &&
             Objects.equals(myConfig.getMaxExpires(), otherConfig.getMaxExpires()) &&
+            Objects.equals(myConfig.getStartTime(), otherConfig.getStartTime()) &&
             myConfig.getStartSequence() == otherConfig.getStartSequence() &&
             myConfig.getMaxPullWaiting() == otherConfig.getMaxPullWaiting() &&
             myConfig.getMaxAckPending() == otherConfig.getMaxAckPending() &&
             myConfig.getMaxBatch() == otherConfig.getMaxBatch() &&
             myConfig.getMaxBytes() == otherConfig.getMaxBytes() &&
             myConfig.getMaxDeliver() == otherConfig.getMaxDeliver() &&
-            myConfig.getMaxPullWaiting() == otherConfig.getMaxPullWaiting() &&
             myConfig.getNumReplicas() == otherConfig.getNumReplicas() &&
             myConfig.getRateLimit() == otherConfig.getRateLimit()
             ;

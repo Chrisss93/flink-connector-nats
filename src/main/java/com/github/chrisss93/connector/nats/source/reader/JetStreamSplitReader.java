@@ -24,7 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsumerSplit> {
     private static final Logger LOG = LoggerFactory.getLogger(JetStreamSplitReader.class);
-
+    private static final int BATCH_SIZE = 5000;
+    private static final long TIMEOUT_MS = 10000L;
 
     private final Connection connection;
     private final JetStreamManagement jsm;
@@ -32,10 +33,7 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
     private final JetStreamSourceReaderMetrics readerMetrics;
     private final Map<String, JetStreamSubscription> subscriptions = new ConcurrentHashMap<>();
     private final Map<String, StopRule> stopRules = new HashMap<>();
-    private boolean shutdown = false;
-
-    private static final int BATCH_SIZE = 5000;
-    private static final long TIMEOUT_MS = 10000L;
+    private final Map<String, Boolean> shutdownSubscription = new HashMap<>();
 
     public JetStreamSplitReader(Options connectOptions, StopRule stopRule, SourceReaderMetricGroup metricGroup) {
         this.stopRule = stopRule;
@@ -55,11 +53,12 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
     public RecordsWithSplitIds<Message> fetch() {
         RecordsBySplits.Builder<Message> recordsWithSplits = new RecordsBySplits.Builder<>();
 
-        if (shutdown) {
-            recordsWithSplits.addFinishedSplits(subscriptions.keySet());
-            return recordsWithSplits.build();
-        }
         subscriptions.forEach( (splitId, subscription) -> {
+            if (shutdownSubscription.containsKey(splitId) && shutdownSubscription.remove(splitId)) {
+                LOG.info("Force-completing split {}", splitId);
+                recordsWithSplits.addFinishedSplit(splitId);
+                return;
+            }
             if (subscription.isActive()) {
                 int i = 0;
                 try {
@@ -92,10 +91,11 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                 try {
                     Message reply = connection.request(r, AckType.AckAck.bytes, Duration.ofSeconds(1L));
                     readerMetrics.updateAcks(reply != null);
-                    if (reply != null) {
+                    if (reply == null) {
                         LOG.warn("NATS did not confirm message acks. Trying again at next checkpoint.");
                     }
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     LOG.warn("NATS did not confirm message acks. Trying again at next checkpoint.");
                 }
             }
@@ -117,8 +117,10 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                 String.format("The SplitChange type of %s is not supported.", splitsChanges.getClass())
             );
         }
+
         if (splitsChanges instanceof SplitsRemoval) {
-            shutdown = true;
+            splitsChanges.splits().forEach(s -> shutdownSubscription.put(s.splitId(), true));
+            readerMetrics.updateConsumerCount(subscriptions.size() - shutdownSubscription.size());
             return;
         }
 

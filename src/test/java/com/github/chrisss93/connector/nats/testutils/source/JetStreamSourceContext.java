@@ -2,9 +2,9 @@ package com.github.chrisss93.connector.nats.testutils.source;
 
 import com.github.chrisss93.connector.nats.source.JetStreamSource;
 import com.github.chrisss93.connector.nats.source.JetStreamSourceBuilder;
-import com.github.chrisss93.connector.nats.source.enumerator.offsets.LatestStop;
+import com.github.chrisss93.connector.nats.source.enumerator.offsets.NumMessageStop;
 import com.github.chrisss93.connector.nats.source.reader.deserializer.StringDeserializer;
-import com.github.chrisss93.connector.nats.testutils.NatsTestContext;
+import com.github.chrisss93.connector.nats.testutils.NATSTestContext;
 import com.github.chrisss93.connector.nats.testutils.NatsTestEnvironment;
 import com.github.chrisss93.connector.nats.testutils.source.writer.JetStreamStringWriter;
 import org.apache.flink.api.connector.source.Boundedness;
@@ -20,7 +20,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphanumeric;
 
-public abstract class JetStreamSourceContext extends NatsTestContext
+public abstract class JetStreamSourceContext extends NATSTestContext
     implements DataStreamSourceExternalContext<String> {
 
     private static final int BATCH_DATA_SIZE = 500;
@@ -29,7 +29,8 @@ public abstract class JetStreamSourceContext extends NatsTestContext
         super(runtime, prefix);
     }
 
-    protected void sourceExtra(JetStreamSourceBuilder<String> builder) {
+    protected JetStreamSourceBuilder<String> sourceExtra(JetStreamSourceBuilder<String> builder) {
+        return builder;
     }
 
     @Override
@@ -38,20 +39,23 @@ public abstract class JetStreamSourceContext extends NatsTestContext
             .setServerURL(runtime.client().getConnectedUrl())
             .setDeserializationSchema(new StringDeserializer())
             .setStream(streamName)
-            .setDefaultConsumerConfiguration("default");
+            .setDefaultConsumerConfiguration("default")
+            .setSplitDiscoveryInterval(500L);
 
         if (sourceSettings.getBoundedness() == Boundedness.BOUNDED) {
-            builder.setStoppingRule(new LatestStop());
+            builder
+                .setStoppingRule(new NumMessageStop(BATCH_DATA_SIZE))
+                .setSplitDiscoveryInterval(-1);
         }
-        sourceExtra(builder);
-        return builder.build();
+        return sourceExtra(builder).build();
     }
 
     @Override
     public ExternalSystemSplitDataWriter<String> createSourceSplitDataWriter(TestingSourceSettings sourceSettings) {
-        makeStream();
-        return new JetStreamStringWriter(runtime.client(), this::testDataToSubject);
+        return new JetStreamStringWriter(runtime.client(), addSubjectName());
     }
+
+    protected abstract String addSubjectName();
 
     @Override
     public List<String> generateTestData(TestingSourceSettings sourceSettings, int splitIndex, long seed) {

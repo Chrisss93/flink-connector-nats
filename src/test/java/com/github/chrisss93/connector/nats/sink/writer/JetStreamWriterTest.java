@@ -1,6 +1,6 @@
 package com.github.chrisss93.connector.nats.sink.writer;
 
-import com.github.chrisss93.connector.nats.sink.writer.serializer.MessageSerializationSchema;
+import com.github.chrisss93.connector.nats.sink.writer.serializer.NATSMessageSerializationSchema;
 import com.github.chrisss93.connector.nats.sink.writer.serializer.StringSerializer;
 import com.github.chrisss93.connector.nats.testutils.NatsTestSuiteBase;
 import io.nats.client.*;
@@ -74,6 +74,7 @@ public class JetStreamWriterTest extends NatsTestSuiteBase {
         assertThat(writer.getPendingMessages()).isEqualTo(1);
 
         // Verify that message has made it to NATS
+        Thread.sleep(100L);
         assertThat(
             client().jetStreamManagement().getStreamInfo(streamName).getStreamState().getLastSequence()
         ).isEqualTo(1);
@@ -86,7 +87,7 @@ public class JetStreamWriterTest extends NatsTestSuiteBase {
         assertThat(message.getSubject()).isEqualTo(streamName + "." + body);
         assertThat(message.getData()).isEqualTo(body.getBytes(StandardCharsets.UTF_8));
 
-        List<String> timestamp = message.getHeaders().get(MessageSerializationSchema.timestampHeaderKey);
+        List<String> timestamp = message.getHeaders().get(NATSMessageSerializationSchema.timestampHeaderKey);
         assertThat(timestamp).isEqualTo(Collections.singletonList(String.valueOf(10)));
 
         writer.close();

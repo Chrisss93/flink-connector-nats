@@ -7,8 +7,8 @@ import org.apache.flink.api.java.typeutils.ResultTypeQueryable;
 import java.io.IOException;
 import java.io.Serializable;
 
-public interface NatsMessageDeserializationSchema<T> extends Serializable, ResultTypeQueryable<T> {
-    default void open(DeserializationSchema.InitializationContext context) {
+public interface NATSMessageDeserializationSchema<T> extends Serializable, ResultTypeQueryable<T> {
+    default void open(DeserializationSchema.InitializationContext context) throws Exception {
     }
     T deserialize(Message message) throws IOException;
 

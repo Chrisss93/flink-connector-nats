@@ -6,18 +6,18 @@ import java.util.Map;
 import java.util.Set;
 
 public class JetStreamSourceEnumState {
-    private final Set<JetStreamConsumerSplit> assignedSplits;
+    private final Map<Integer, Set<JetStreamConsumerSplit>> assignedSplits;
     private final Map<Integer, Set<JetStreamConsumerSplit>> pendingAssignments;
 
     JetStreamSourceEnumState(
-        Set<JetStreamConsumerSplit> assignedSplits, Map<Integer,
-        Set<JetStreamConsumerSplit>> pendingAssignments) {
+        Map<Integer, Set<JetStreamConsumerSplit>> assignedSplits,
+        Map<Integer, Set<JetStreamConsumerSplit>> pendingAssignments) {
 
         this.assignedSplits = assignedSplits;
         this.pendingAssignments = pendingAssignments;
     }
 
-    public Set<JetStreamConsumerSplit> getAssignedSplits() {
+    public Map<Integer, Set<JetStreamConsumerSplit>> getAssignedSplits() {
         return assignedSplits;
     }
 

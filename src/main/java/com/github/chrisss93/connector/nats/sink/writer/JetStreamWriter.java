@@ -1,7 +1,7 @@
 package com.github.chrisss93.connector.nats.sink.writer;
 
 import com.github.chrisss93.connector.nats.sink.metrics.JetStreamSinkWriterMetrics;
-import com.github.chrisss93.connector.nats.sink.writer.serializer.MessageSerializationSchema;
+import com.github.chrisss93.connector.nats.sink.writer.serializer.NATSMessageSerializationSchema;
 import io.nats.client.*;
 import io.nats.client.api.PublishAck;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -32,7 +32,7 @@ public class JetStreamWriter<T> implements SinkWriter<T> {
 
     private final Connection connection;
     private final JetStream js;
-    private final MessageSerializationSchema<T> serializationSchema;
+    private final NATSMessageSerializationSchema<T> serializationSchema;
     private final MailboxExecutor mailboxExecutor;
     private final ProcessingTimeService timeService;
     private final int maxPendingMessages;
@@ -43,7 +43,7 @@ public class JetStreamWriter<T> implements SinkWriter<T> {
 
     public JetStreamWriter(
         Properties connectProps,
-        MessageSerializationSchema<T> serializationSchema,
+        NATSMessageSerializationSchema<T> serializationSchema,
         Sink.InitContext initContext) {
 
         Options connectOptions = new Options.Builder(connectProps).turnOnAdvancedStats().build();

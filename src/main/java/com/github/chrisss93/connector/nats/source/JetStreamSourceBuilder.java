@@ -1,7 +1,7 @@
 package com.github.chrisss93.connector.nats.source;
 
 import com.github.chrisss93.connector.nats.common.SubjectUtils;
-import com.github.chrisss93.connector.nats.source.reader.deserializer.NatsMessageDeserializationSchema;
+import com.github.chrisss93.connector.nats.source.reader.deserializer.NATSMessageDeserializationSchema;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.NeverStop;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.StartRule;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.StopRule;
@@ -28,13 +28,14 @@ public class JetStreamSourceBuilder<T> {
     private StopRule stopRule = new NeverStop();
     private StartRule startRule = StartRule.EARLIEST;
     private long startValue = -1;
-    private NatsMessageDeserializationSchema<T> deserializationSchema;
+    private NATSMessageDeserializationSchema<T> deserializationSchema;
     private final Set<ConsumerConfiguration.Builder> consumers = new HashSet<>();
     private ConsumerConfiguration.Builder defaultConsumer;
-    private boolean dynamicConsumers = false;
+    private boolean discoverSplits = false;
     private boolean ackMessageOnCheckpoint = true;
     private boolean ackEachMessage = false;
     private int numFetchersPerReader = 1;
+    private long splitDiscoveryIntervalMs = 300000L;
 
     public JetStreamSourceBuilder<T> setServerURL(String address) {
         connectProps.setProperty(Options.PROP_URL, address);
@@ -62,7 +63,7 @@ public class JetStreamSourceBuilder<T> {
         return this;
     }
 
-    public JetStreamSourceBuilder<T> setDeserializationSchema(NatsMessageDeserializationSchema<T> schema) {
+    public JetStreamSourceBuilder<T> setDeserializationSchema(NATSMessageDeserializationSchema<T> schema) {
         this.deserializationSchema = schema;
         return this;
     }
@@ -106,7 +107,7 @@ public class JetStreamSourceBuilder<T> {
     }
 
     public JetStreamSourceBuilder<T> setDefaultConsumerConfiguration(ConsumerConfiguration.Builder builder) {
-        this.dynamicConsumers = true;
+        this.discoverSplits = true;
         defaultConsumer = builder;
         return this;
     }
@@ -123,6 +124,11 @@ public class JetStreamSourceBuilder<T> {
 
     public JetStreamSourceBuilder<T> setNumFetchersPerReader(int numFetchers) {
         this.numFetchersPerReader = numFetchers;
+        return this;
+    }
+
+    public JetStreamSourceBuilder<T> setSplitDiscoveryInterval(long milliseconds) {
+        this.splitDiscoveryIntervalMs = milliseconds;
         return this;
     }
 
@@ -148,14 +154,19 @@ public class JetStreamSourceBuilder<T> {
         checkArgument(numFetchersPerReader > 0, "numFetchersPerReader must be set to a positive value");
         validateStreamName(stream, true);
         new Options.Builder(connectProps).build();
+        if (!discoverSplits && splitDiscoveryIntervalMs > 0) {
+            LOG.warn("splitFilterDiscoveryInterval is set but defaultConsumerConfiguration is not. The connector" +
+                " will NOT periodically look for any changes in the stream's subject-filters to add/revoke splits");
+        }
 
         return new JetStreamSource<>(
             connectProps,
             deserializationSchema,
             stream,
-            makeNATSConsumerConfig(dynamicConsumers ? Collections.singleton(defaultConsumer) : consumers),
+            makeNATSConsumerConfig(discoverSplits ? Collections.singleton(defaultConsumer) : consumers),
             stopRule,
-            dynamicConsumers,
+            discoverSplits,
+            splitDiscoveryIntervalMs,
             ackMessageOnCheckpoint,
             ackEachMessage,
             numFetchersPerReader

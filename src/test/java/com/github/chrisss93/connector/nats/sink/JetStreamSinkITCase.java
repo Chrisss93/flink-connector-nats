@@ -2,7 +2,6 @@ package com.github.chrisss93.connector.nats.sink;
 
 import com.github.chrisss93.connector.nats.testutils.NatsTestContextFactory;
 import com.github.chrisss93.connector.nats.testutils.NatsTestEnvironment;
-import com.github.chrisss93.connector.nats.testutils.runtime.JVMRuntime;
 import com.github.chrisss93.connector.nats.testutils.sink.JetStreamSinkContext;
 import com.github.chrisss93.connector.nats.testutils.sink.cases.MultiSubjectContext;
 import com.github.chrisss93.connector.nats.testutils.sink.cases.SingleSubjectContext;
@@ -26,7 +25,7 @@ public class JetStreamSinkITCase extends SinkTestSuiteBase<String> {
 
     // Defines external nats-server system
     @TestExternalSystem
-    NatsTestEnvironment natsEnv = new NatsTestEnvironment(new JVMRuntime());
+    NatsTestEnvironment natsEnv = new NatsTestEnvironment();
 
 
     // Checkpointing semantics in sink connector are not configurable.

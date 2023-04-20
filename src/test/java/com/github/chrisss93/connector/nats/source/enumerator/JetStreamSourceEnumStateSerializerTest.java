@@ -57,10 +57,10 @@ public class JetStreamSourceEnumStateSerializerTest {
                 .build()
         );
 
-        Set<JetStreamConsumerSplit> assignedSplits = new HashSet<>();
+        Map<Integer, Set<JetStreamConsumerSplit>> assignedSplits = new HashMap<>();
         Map<Integer, Set<JetStreamConsumerSplit>> pendingSplitAssignments = new HashMap<>();
 
-        assignedSplits.add(red);
+        assignedSplits.put(1, Collections.singleton(red));
         pendingSplitAssignments.put(2, Collections.singleton(green));
         pendingSplitAssignments.put(3, Stream.of(blue, yellow).collect(Collectors.toSet()));
 
@@ -70,8 +70,12 @@ public class JetStreamSourceEnumStateSerializerTest {
         byte[] b = serializer.serialize(myEnum);
         JetStreamSourceEnumState deserializedEnum = serializer.deserialize(0, b);
 
-        assertThat(deserializedEnum.getAssignedSplits())
-            .containsExactlyInAnyOrderElementsOf(myEnum.getAssignedSplits());
+        assertThat(deserializedEnum.getAssignedSplits().keySet())
+            .isEqualTo(myEnum.getAssignedSplits().keySet());
+
+        deserializedEnum.getAssignedSplits().forEach(
+            (k, v) -> assertThat(v).containsExactlyInAnyOrderElementsOf(myEnum.getAssignedSplits().get(k))
+        );
 
         assertThat(deserializedEnum.getPendingAssignments().keySet())
             .isEqualTo(myEnum.getPendingAssignments().keySet());

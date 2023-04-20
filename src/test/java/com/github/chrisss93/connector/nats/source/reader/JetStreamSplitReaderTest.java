@@ -1,6 +1,7 @@
 package com.github.chrisss93.connector.nats.source.reader;
 
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.*;
+import com.github.chrisss93.connector.nats.source.splits.SplitsRemoval;
 import com.github.chrisss93.connector.nats.testutils.NatsTestSuiteBase;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import io.nats.client.Message;
@@ -15,7 +16,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.commons.lang3.RandomStringUtils.randomAlphabetic;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -107,7 +110,7 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
         for (; i < NUM_MESSAGES * 2; i++) {
             client().publish(String.format("%s.%s.%d", streamName, consumerName, i), new byte[]{i});
         }
-        List<Message> messages = fetchMessages(splitReader, Collections.singleton(split.splitId()));
+        List<Message> messages = fetchMessages(splitReader, singleton(split.splitId()));
         assertThat(messages).hasSize(3);
 
         for (byte b = 0; b < messages.size(); b++) {
@@ -134,7 +137,7 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
         }
         JetStreamConsumerSplit split = addSplit(splitReader, consumerName);
 
-        List<Message> messages = fetchMessages(splitReader, Collections.singleton(split.splitId()));
+        List<Message> messages = fetchMessages(splitReader, singleton(split.splitId()));
         assertThat(messages).hasSize(NUM_MESSAGES + 1);
 
         for (byte b = 0; b < messages.size(); b++) {
@@ -153,7 +156,7 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
         }
         JetStreamConsumerSplit split = addSplit(splitReader, consumerName, consumerName);
 
-        List<Message> messages = fetchMessages(splitReader, Collections.singleton(split.splitId()));
+        List<Message> messages = fetchMessages(splitReader, singleton(split.splitId()));
         deleteStream(consumerName);
         assertThat(messages).hasSize(NUM_MESSAGES);
 
@@ -169,7 +172,7 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
         JetStreamConsumerSplit split = addSplit(splitReader, consumerName);
 
         // Pause the split
-        splitReader.pauseOrResumeSplits(Collections.singleton(split), Collections.emptySet());
+        splitReader.pauseOrResumeSplits(singleton(split), Collections.emptySet());
         for (int i = 0; i < NUM_MESSAGES ; i++) {
             client().publish(String.format("%s.%s.%d", streamName, consumerName, i), new byte[]{1});
         }
@@ -180,9 +183,36 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
             client().publish(String.format("%s.%s.%d", streamName, consumerName, i), new byte[]{1});
         }
         // Resume the split
-        splitReader.pauseOrResumeSplits(Collections.emptySet(), Collections.singleton(split));
+        splitReader.pauseOrResumeSplits(Collections.emptySet(), singleton(split));
         assertThat(fetchMessages(splitReader)).hasSize(NUM_MESSAGES * 2);
     }
+
+    @Test
+    void splitRemoval(TestInfo test) {
+        String consumerName = sanitizeDisplay(test);
+        JetStreamSplitReader splitReader = jetStreamConsumer(new NeverStop());
+
+        // Add two splits
+        addSplit(splitReader, consumerName);
+        JetStreamConsumerSplit split = addSplit(splitReader, consumerName + "Other");
+
+        // Add messages to be fetched
+        client().publish(String.format("%s.%s.1", streamName, consumerName), new byte[]{1});
+        client().publish(String.format("%s.%s.1", streamName, consumerName + "Other"), new byte[]{1});
+
+        assertThat(fetchMessages(splitReader)).hasSize(2);
+
+        // Remove second split
+        splitReader.handleSplitsChanges(new SplitsRemoval<>(singletonList(split)));
+
+        // Add more messages to be fetched
+        client().publish(String.format("%s.%s.2", streamName, consumerName), new byte[]{1});
+        client().publish(String.format("%s.%s.2", streamName, consumerName + "Other"), new byte[]{1});
+
+        // second split is finished and only results from the unclosed split are returned.
+        assertThat(fetchMessages(splitReader, singletonList(split.splitId()))).hasSize(1);
+    }
+
 
     private JetStreamSplitReader jetStreamConsumer(StopRule stopRule) {
         return new JetStreamSplitReader(
@@ -211,19 +241,20 @@ public class JetStreamSplitReaderTest extends NatsTestSuiteBase {
     private List<Message> fetchMessages(JetStreamSplitReader reader) {
         return fetchMessages(reader, new HashSet<>());
     }
-    private List<Message> fetchMessages(JetStreamSplitReader reader, Set<String> expectedFinished) {
+    private List<Message> fetchMessages(JetStreamSplitReader reader, Collection<String> expectedFinished) {
         List<Message> messages = new ArrayList<>();
         Set<String> finishedSplits = new HashSet<>();
 
         RecordsWithSplitIds<Message> records = reader.fetch();
-        if (records.nextSplit() != null) {
+        while (records.nextSplit() != null) {
             Message msg;
             while ((msg = records.nextRecordFromSplit()) != null) {
                 messages.add(msg);
             }
             finishedSplits.addAll(records.finishedSplits());
         }
-        assertThat(finishedSplits).isEqualTo(expectedFinished);
+        assertThat(finishedSplits).hasSameElementsAs(expectedFinished);
+        reader.acknowledge(messages.stream().map(Message::getReplyTo).collect(Collectors.toSet()), false);
         return messages;
     }
 }

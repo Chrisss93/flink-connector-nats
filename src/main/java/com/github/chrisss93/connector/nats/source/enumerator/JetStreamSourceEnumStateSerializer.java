@@ -3,7 +3,6 @@ package com.github.chrisss93.connector.nats.source.enumerator;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplitSerializer;
 import com.github.chrisss93.connector.nats.source.splits.JetStreamConsumerSplit;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
-import org.apache.flink.util.FlinkRuntimeException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -27,19 +26,8 @@ public class JetStreamSourceEnumStateSerializer implements SimpleVersionedSerial
         try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
              ObjectOutputStream out = new ObjectOutputStream(bytes)) {
 
-            out.writeInt(obj.getAssignedSplits().size());
-            for (JetStreamConsumerSplit split : obj.getAssignedSplits()) {
-                JetStreamConsumerSplit.write(split, out);
-            }
-
-            out.writeInt(obj.getPendingAssignments().size());
-            for (Map.Entry<Integer, Set<JetStreamConsumerSplit>> entry : obj.getPendingAssignments().entrySet()) {
-                out.writeInt(entry.getKey());
-                out.writeInt(entry.getValue().size());
-                for (JetStreamConsumerSplit split : entry.getValue()) {
-                    JetStreamConsumerSplit.write(split, out);
-                }
-            }
+            serializeMap(obj.getAssignedSplits(), out);
+            serializeMap(obj.getPendingAssignments(), out);
             out.flush();
             return bytes.toByteArray();
         }
@@ -50,32 +38,39 @@ public class JetStreamSourceEnumStateSerializer implements SimpleVersionedSerial
         try (ByteArrayInputStream bytes = new ByteArrayInputStream(serialized);
              ObjectInputStream in = new ObjectInputStream(bytes)) {
 
-            int assignedSize = in.readInt();
-            Set<JetStreamConsumerSplit> assigned = new HashSet<>(assignedSize);
-            for (int i = 0; i < assignedSize; i++) {
-                try {
-                    assigned.add(JetStreamConsumerSplit.read(in));
-                } catch (ClassNotFoundException e) {
-                    throw new FlinkRuntimeException(e);
-                }
-            }
-
-            int pendingSize = in.readInt();
-            Map<Integer, Set<JetStreamConsumerSplit>> pending = new HashMap<>(pendingSize);
-            for (int i = 0; i < pendingSize; i++) {
-                int k = in.readInt();
-                int size = in.readInt();
-                HashSet<JetStreamConsumerSplit> splits = new HashSet<>(size);
-                for (int j = 0; j < size; j++) {
-                    try {
-                        splits.add(JetStreamConsumerSplit.read(in));
-                    } catch (ClassNotFoundException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                pending.put(k, splits);
-            }
-            return new JetStreamSourceEnumState(assigned, pending);
+            return new JetStreamSourceEnumState(deserializeMap(in), deserializeMap(in));
         }
+    }
+
+    private void serializeMap(Map<Integer, Set<JetStreamConsumerSplit>> map, ObjectOutputStream out)
+        throws IOException {
+
+        out.writeInt(map.size());
+        for (Map.Entry<Integer, Set<JetStreamConsumerSplit>> entry : map.entrySet()) {
+            out.writeInt(entry.getKey());
+            out.writeInt(entry.getValue().size());
+            for (JetStreamConsumerSplit split : entry.getValue()) {
+                JetStreamConsumerSplit.write(split, out);
+            }
+        }
+    }
+
+    private Map<Integer, Set<JetStreamConsumerSplit>> deserializeMap(ObjectInputStream in) throws IOException {
+        int mSize = in.readInt();
+        Map<Integer, Set<JetStreamConsumerSplit>> map = new HashMap<>(mSize);
+        for (int i = 0; i < mSize; i++) {
+            int k = in.readInt();
+            int size = in.readInt();
+            HashSet<JetStreamConsumerSplit> splits = new HashSet<>(size);
+            for (int j = 0; j < size; j++) {
+                try {
+                    splits.add(JetStreamConsumerSplit.read(in));
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            map.put(k, splits);
+        }
+        return map;
     }
 }
