@@ -130,14 +130,13 @@ public class JetStreamConsumerSplit implements SourceSplit {
             Objects.equals(myConfig.getSampleFrequency(), otherConfig.getSampleFrequency()) &&
             Objects.equals(myConfig.getReplayPolicy(), otherConfig.getReplayPolicy()) &&
             Objects.equals(myConfig.getMaxExpires(), otherConfig.getMaxExpires()) &&
+            Objects.equals(myConfig.getStartTime(), otherConfig.getStartTime()) &&
             myConfig.getStartSequence() == otherConfig.getStartSequence() &&
-            myConfig.getStartTime() == otherConfig.getStartTime() &&
             myConfig.getMaxPullWaiting() == otherConfig.getMaxPullWaiting() &&
             myConfig.getMaxAckPending() == otherConfig.getMaxAckPending() &&
             myConfig.getMaxBatch() == otherConfig.getMaxBatch() &&
             myConfig.getMaxBytes() == otherConfig.getMaxBytes() &&
             myConfig.getMaxDeliver() == otherConfig.getMaxDeliver() &&
-            myConfig.getMaxPullWaiting() == otherConfig.getMaxPullWaiting() &&
             myConfig.getNumReplicas() == otherConfig.getNumReplicas() &&
             myConfig.getRateLimit() == otherConfig.getRateLimit()
             ;
