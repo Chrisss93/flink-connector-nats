@@ -250,7 +250,7 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
         FIELD_POSITIONS.put("name", 2);
         FIELD_POSITIONS.put("age", 3);
         FIELD_POSITIONS.put("DOB", 4);
-        FIELD_POSITIONS.put("streamSeq", 5);
+        FIELD_POSITIONS.put("headers", 5);
     }
 
     private List<Row> expectedRows(String streamName) {
