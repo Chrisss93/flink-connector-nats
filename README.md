@@ -89,7 +89,38 @@ The following metadata fields are available:
 | timestamp   | TIMESTAMP(9)                  | &check;  | &cross;   |
 | pending     | BIGINT                        | &check;  | &cross;   |
 
-The Table Source supports limit push-down, watermark push-down and a small degree of filter push-down. Importantly here, the field-name: `subject` (case-sensitive) is reserved for the corresponding metadata field and it will be pushed-down if an expression with it is present in the `WHERE` clause of a table query.
+The Table Source supports limit push-down, watermark push-down and a very limited degree of filter push-down.
+
+### Filter push-down
+
+Importantly here, the field-name: `subject` (case-sensitive) is reserved for the corresponding metadata field, and it will be pushed-down if an expression with it is present in the `WHERE` clause of a table query. For now the expression parser remains very simplistic so only basic predicates referencing the unmodified `subject` field and one or more values can be pushed down.
+
+For example, the following SQL predicates can be pushed down:
+```sql
+WHERE subject = "thing"
+```
+```sql
+WHERE subject LIKE "%.stuff"
+```
+```sql
+WHERE subject IN ("one", "two")
+```
+
+Meanwhile, the following SQL predicates cannot be pushed down and the filtering logic will be applied after the provider has fetched the records from all subjects:
+
+```sql
+WHERE subject IN (otherField['validSubjects']) -- referencing another field
+```
+```sql
+WHERE UPPER(subject) == "SOMETHING" -- transforming the subject
+```
+```sql
+WHERE subject == 'prefix' || 'suffix' -- not a value literal
+```
+
+For now, there is a degree of concurrency but also resource-overhead when multiple predicates are pushed down (i.e. `WHERE subject = 'a' OR subject = 'b'` or `WHERE subject IN ('a', 'b')`) since this will create a NATS consumer for each subject filter and read them concurrently. When a push-down filter for multiple subjects is desired, if possible, use a pattern that can capture the desired subjects with the ANSI `LIKE` clause (`%` character will be translated into the NATS full-wildcard).
+
+### Table Sinks
 
 For table sinks (ie. `INSERT` statements), if the `subject` metadata field is not present in the table, a static setting `sink.subject` can be configured to specify the NATS subject that every inserted row will be written to on the NATS server. As with the DataStream Sink API, the  subject (specified either statically with config-options or dynamically with the writeable metadata column) must have a subscriber on the NATS server or else be captured by a NATS stream. Otherwise, the insert statement will fail.
 

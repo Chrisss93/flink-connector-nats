@@ -5,8 +5,14 @@ import org.apache.flink.table.expressions.utils.ResolvedExpressionDefaultVisitor
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Optional;
 import java.util.function.Function;
+
+import static java.util.Collections.singletonList;
+import static java.util.Arrays.asList;
 
 public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<String>> {
     private static final String FIELD_NAME = "subject";
@@ -18,7 +24,7 @@ public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<
             if (!(value instanceof String)) {
                 throw new ExpressionParserException("SHIT");
             }
-            return new ArrayList<>(List.of((String) value));
+            return new ArrayList<>(singletonList((String) value));
         });
 
         VALID_FUNCS.put(BuiltInFunctionDefinitions.LIKE, (value) -> {
@@ -30,14 +36,14 @@ public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<
                 // Can't express NATS subject wildcards in terms of the ANSI LIKE underscore character semantics.
                 return null;
             }
-            return new ArrayList<>(List.of(str.replaceAll("%", ">")));
+            return new ArrayList<>(singletonList(str.replaceAll("%", ">")));
         });
 
         VALID_FUNCS.put(BuiltInFunctionDefinitions.IN, (value) -> {
             if (!(value instanceof String[])) {
                 throw new ExpressionParserException("SHIT");
             }
-            return new ArrayList<>(Arrays.asList((String[]) value));
+            return new ArrayList<>(asList((String[]) value));
         });
 
     }
@@ -66,14 +72,19 @@ public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<
         }
 
 
-        String fieldName;
-        ValueLiteralExpression valueExpr;
-        if (valueOnRight(callExpr)) {
-            fieldName = ((FieldReferenceExpression) callExpr.getChildren().get(0)).getName();
-            valueExpr = (ValueLiteralExpression) callExpr.getChildren().get(1);
-        } else {
-            fieldName = ((FieldReferenceExpression) callExpr.getChildren().get(1)).getName();
-            valueExpr = (ValueLiteralExpression) callExpr.getChildren().get(0);
+        String fieldName = null;
+        ValueLiteralExpression valueExpr = null;
+        switch (valuePosition(callExpr)) {
+            case Left:
+                fieldName = ((FieldReferenceExpression) callExpr.getChildren().get(1)).getName();
+                valueExpr = (ValueLiteralExpression) callExpr.getChildren().get(0);
+                break;
+            case Right:
+                fieldName = ((FieldReferenceExpression) callExpr.getChildren().get(0)).getName();
+                valueExpr = (ValueLiteralExpression) callExpr.getChildren().get(1);
+                break;
+            case Invalid:
+                return null;
         }
 
         // Only handle expressions referencing the FIELD_NAME
@@ -95,16 +106,16 @@ public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<
         return handler.apply(valueOpt.get());
     }
 
-    private static boolean valueOnRight(CallExpression comp) {
+    private static ValuePosition valuePosition(CallExpression comp) {
         if (comp.getChildren().size() == 1
             && comp.getChildren().get(0) instanceof FieldReferenceExpression) {
-            return true;
+            return ValuePosition.Right;
         } else if (isValue(comp.getChildren().get(0)) && isRef(comp.getChildren().get(1))) {
-            return false;
+            return ValuePosition.Left;
         } else if (isRef(comp.getChildren().get(0)) && isValue(comp.getChildren().get(1))) {
-            return true;
+            return ValuePosition.Right;
         } else {
-            throw new RuntimeException("Invalid binary comparison.");
+            return ValuePosition.Invalid;
         }
     }
 
@@ -113,5 +124,11 @@ public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<
     }
     private static boolean isRef(Expression expr) {
         return expr instanceof FieldReferenceExpression;
+    }
+
+    private enum ValuePosition {
+        Left,
+        Right,
+        Invalid
     }
 }

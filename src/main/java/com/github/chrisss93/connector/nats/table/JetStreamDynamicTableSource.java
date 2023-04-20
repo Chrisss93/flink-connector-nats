@@ -3,8 +3,6 @@ package com.github.chrisss93.connector.nats.table;
 import com.github.chrisss93.connector.nats.common.SubjectUtils;
 import com.github.chrisss93.connector.nats.source.JetStreamSourceBuilder;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.NumMessageStop;
-import io.nats.client.Connection;
-import io.nats.client.JetStreamApiException;
 import io.nats.client.api.ConsumerConfiguration;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
@@ -22,9 +20,12 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.types.DataType;
 
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class JetStreamDynamicTableSource implements ScanTableSource, SupportsReadingMetadata,
     SupportsWatermarkPushDown, SupportsLimitPushDown, SupportsFilterPushDown {

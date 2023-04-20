@@ -5,7 +5,6 @@ import io.nats.client.Message;
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.table.api.DataTypes;
-import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.data.*;
 import org.apache.flink.table.types.DataType;
 
@@ -63,7 +62,7 @@ public class TableDeserializationSchema implements NATSMessageDeserializationSch
         private static final String consumerSeqKey = "consumerSeq";
         private static final String timestampKey = "timestamp";
         private static final String pendingKey = "pending";
-        static Map<String, DataType>  CATALOG;
+        final static Map<String, DataType>  CATALOG;
         static {
             CATALOG = new HashMap<>();
             CATALOG.put(headerKey, DataTypes.MAP(DataTypes.STRING(), DataTypes.ARRAY(DataTypes.STRING())));

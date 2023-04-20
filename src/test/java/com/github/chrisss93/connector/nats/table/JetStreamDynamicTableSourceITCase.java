@@ -1,10 +1,20 @@
 package com.github.chrisss93.connector.nats.table;
 
 import com.github.chrisss93.connector.nats.testutils.NatsTestSuiteBase;
+import com.github.chrisss93.connector.nats.testutils.SinkCollector;
 import io.nats.client.impl.Headers;
-import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
+import org.apache.flink.api.common.JobID;
+import org.apache.flink.client.program.rest.RestClusterClient;
+import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.runtime.jobgraph.JobVertexID;
+import org.apache.flink.runtime.metrics.MetricNames;
+import org.apache.flink.runtime.rest.messages.*;
+import org.apache.flink.runtime.rest.messages.job.JobDetailsInfo;
+import org.apache.flink.runtime.rest.messages.job.metrics.*;
+import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.test.junit5.InjectClusterClient;
 import org.apache.flink.test.junit5.MiniClusterExtension;
 import org.apache.flink.types.Row;
 import org.apache.flink.types.RowKind;
@@ -12,42 +22,37 @@ import org.apache.flink.types.RowUtils;
 import org.apache.flink.util.CloseableIterator;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.ListAssert;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
-import static com.github.chrisss93.connector.nats.table.JetStreamConnectorOptions.StopRuleEnum.NeverStop;
+import static com.github.chrisss93.connector.nats.table.JetStreamConnectorOptions.StopRuleEnum.NumMessageStop;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
-    private static final int NUM_RECORDS = 3;
+    private static final int NUM_SUBJECTS = 10;
     private static final int CURRENT_YEAR = 2023;
-    private static final String msgTemplate = "{\"id\": %d, \"name\": \"%s\", \"age\": %d}";
+    private static final String jsonTemplate = "{\"id\": %d, \"name\": \"%s\", \"age\": %d}";
     private static StreamExecutionEnvironment env;
     private static StreamTableEnvironment tEnv;
 
-
     @RegisterExtension
-    static final MiniClusterExtension MINI_CLUSTER_RESOURCE = new MiniClusterExtension(
-        new MiniClusterResourceConfiguration.Builder().setNumberTaskManagers(1).build()
-    );
+    static final MiniClusterExtension MINI_CLUSTER_RESOURCE = new MiniClusterExtension();
 
     @BeforeEach
     public void beforeEach(TestInfo info) throws Exception {
         env = StreamExecutionEnvironment.getExecutionEnvironment();
-        env.setParallelism(1);
         tEnv = StreamTableEnvironment.create(env);
         String streamName = sanitizeDisplay(info);
         createStream(streamName, streamName + ".>");
         // Populate stream
-        for (int i = 0; i < NUM_RECORDS; i++) {
+        for (int i = 0; i < NUM_SUBJECTS; i++) {
             client().publish(streamName + ".standard." + i,
                 new Headers().add("one", "foo", "bar").add("two", "blue"),
-                String.format(msgTemplate, i, alphabet(i), i * 10).getBytes(StandardCharsets.UTF_8)
+                String.format(jsonTemplate, i, alphabet(i), i * 10).getBytes(StandardCharsets.UTF_8)
             );
         }
     }
@@ -59,8 +64,11 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
 
     @Test
     public void selectStar(TestInfo info) throws Exception {
+        Map<String, String> extraProps = new HashMap<>();
+        extraProps.put("stop.rule", NumMessageStop.name());
+        extraProps.put("stop.value", String.valueOf(NUM_SUBJECTS));
         String streamName = sanitizeDisplay(info);
-        tEnv.executeSql(createTableDDL(streamName));
+        tEnv.executeSql(createTableDDL(streamName, extraProps));
 
         List<Row> collectedRows = new ArrayList<>();
         try(CloseableIterator<Row> collected = tEnv.executeSql("SELECT * FROM nats_source").collect()) {
@@ -76,14 +84,14 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
     @Test
     public void limitPushDown(TestInfo info) throws Exception {
         String streamName = sanitizeDisplay(info);
-        tEnv.executeSql(createTableDDL(streamName, Collections.singletonMap("stop.rule", NeverStop.name())));
+        tEnv.executeSql(createTableDDL(streamName));
 
         // Publish extra malformed message to NATS stream
         client().publish(streamName + ".bad", new byte[]{1});
 
         List<Row> collectedRows = new ArrayList<>();
         try(CloseableIterator<Row> collected = tEnv.executeSql(
-            "SELECT * FROM nats_source LIMIT " + NUM_RECORDS).collect()) {
+            "SELECT * FROM nats_source LIMIT " + NUM_SUBJECTS).collect()) {
             while (collected.hasNext()) {
                 collectedRows.add(collected.next());
             }
@@ -96,8 +104,8 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
     @Test
     public void filterPushDownEqual(TestInfo info) throws Exception {
         String streamName = sanitizeDisplay(info);
-        String[] subjects = new String[NUM_RECORDS];
-        for (int i = 0; i < NUM_RECORDS; i++) {
+        String[] subjects = new String[NUM_SUBJECTS];
+        for (int i = 0; i < NUM_SUBJECTS; i++) {
             subjects[i] = String.format("subject = '%s.standard.%d'", streamName, i);
         }
 
@@ -108,8 +116,8 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
     @Test
     public void filterPushDownIn(TestInfo info) throws Exception {
         String streamName = sanitizeDisplay(info);
-        String[] subjects = new String[NUM_RECORDS];
-        for (int i = 0; i < NUM_RECORDS; i++) {
+        String[] subjects = new String[NUM_SUBJECTS];
+        for (int i = 0; i < NUM_SUBJECTS; i++) {
             subjects[i] = String.format("'%s.standard.%d'", streamName, i);
         }
 
@@ -124,7 +132,62 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
         filterPushDownQuery(streamName, predicate, true);
     }
 
-    // TODO: How to easily test watermark-push-down ability?
+
+    // This test needs to convert table query back to datastream API so the job can run asynchronously.
+    // This is required to check the exposed job metrics before the MiniCluster takes itself down.
+    @Test
+    public void filterPushDownPartial(TestInfo info,
+                                      @InjectClusterClient RestClusterClient<?> restClusterClient) throws Exception {
+
+        Map<String, String> extraProps = new HashMap<>();
+        String streamName = sanitizeDisplay(info);
+//        env.setParallelism(1);
+        tEnv.executeSql(createTableDDL(streamName, extraProps));
+
+        // Publish extra malformed message to NATS stream
+        client().publish(streamName + ".bad", new byte[]{1});
+
+        DataStream<Row> datastream = tEnv.toDataStream(
+            tEnv.sqlQuery(
+                "SELECT * FROM nats_source WHERE id % 2 = 0 AND subject LIKE '" + streamName + ".standard.%'"
+            )
+        );
+        SinkCollector<Row> sinkCollector = SinkCollector.apply(datastream);
+        JobClient jobClient = env.executeAsync(streamName + " job");
+
+        Iterator<Row> expectedIter = expectedRows(streamName).stream()
+            .filter(r -> (long) (r.getField("id")) % 2 == 0)
+            .iterator();
+
+        try (CloseableIterator<Row> iterator = sinkCollector.build(jobClient)) {
+            int i = 0;
+            Row firstMessage = null;
+            // Checking results
+            while (iterator.hasNext()) {
+                Row row = iterator.next();
+                if (firstMessage == null) {
+                    firstMessage = row;
+                }
+
+                Row expected;
+                if (expectedIter.hasNext()) {
+                    expected = expectedIter.next();
+                } else {
+                    expected = firstMessage;
+                }
+                assertThat(row).isEqualTo(expected);
+                if (i++ == NUM_SUBJECTS / 2) {
+                    break;
+                }
+            }
+            // Checking metrics
+            Optional<Double> recordsWritten = recordsWrittenMetric(restClusterClient, jobClient.getJobID());
+            Assertions.assertThat(recordsWritten).isEqualTo(Optional.of(NUM_SUBJECTS * 2d));
+
+        }
+    }
+
+    // TODO: How to define test for watermark-push-down ability?
 
     private String createTableDDL(String stream) {
         return createTableDDL(stream, new HashMap<>());
@@ -144,8 +207,6 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
             "'consumer.prefix' = 'test',",
             "'consumer.extra.props' = 'name:test,ack_wait:10e9',",
             "'stream' = '" + stream + "',",
-            "'stop.rule' = 'NumMessageStop',",
-            "'stop.value' = '" + NUM_RECORDS + "',",
             String.format("'io.nats.client.servers' = '%s'", client().getConnectedUrl()),
             extraOptions.entrySet().stream()
                 .map(e -> String.format(",'%s' = '%s'", e.getKey(), e.getValue()))
@@ -156,16 +217,12 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
     }
 
     private void filterPushDownQuery(String stream, String predicate, boolean ordered) throws Exception {
-//        Map<String, String> extraProps = new HashMap<>();
-//        extraProps.put("stop.rule", TimerStop.name());
-//        extraProps.put("stop.value", String.valueOf(10000L));
-
-        tEnv.executeSql(createTableDDL(stream, Collections.singletonMap("stop.rule", NeverStop.name())));
-
+        tEnv.executeSql(createTableDDL(stream));
         // Publish extra malformed message to NATS stream
         client().publish(stream + ".bad", new byte[]{1});
 
-        String query = "SELECT * FROM nats_source WHERE " + predicate + "LIMIT 4";
+        String query = "SELECT * FROM nats_source WHERE " + predicate + " LIMIT " + (NUM_SUBJECTS + 1);
+        System.out.println(query);
         List<Row> collectedRows = new ArrayList<>();
         try(CloseableIterator<Row> collected = tEnv.executeSql(query).collect()) {
             while (collected.hasNext()) {
@@ -176,8 +233,8 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
         // A bit of a hack here. Since checkpointing is disabled, source will not ack messages and NATS will
         // eventually send the messages again. We rely on the message retry to trigger the stopping condition. But
         // this also means the first message retry will be included in the result, so we drop it.
-        Assertions.assertThat(collectedRows).hasSize(4);
-        ListAssert<Row> a = Assertions.assertThat(collectedRows.subList(0, 3));
+        Assertions.assertThat(collectedRows).hasSize(NUM_SUBJECTS + 1);
+        ListAssert<Row> a = Assertions.assertThat(collectedRows.subList(0, collectedRows.size() - 1));
         if (ordered) {
             a.isEqualTo(expected);
         } else {
@@ -201,8 +258,8 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
         headers.put("one", new String[]{"foo", "bar"});
         headers.put("two", new String[]{"blue"});
 
-        ArrayList<Row> expected = new ArrayList<>(NUM_RECORDS);
-        for (int i = 0; i < NUM_RECORDS; i++) {
+        ArrayList<Row> expected = new ArrayList<>(NUM_SUBJECTS);
+        for (int i = 0; i < NUM_SUBJECTS; i++) {
             Row row = RowUtils.createRowWithNamedPositions(
                 RowKind.INSERT,
                 new Object[]{
@@ -227,5 +284,52 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
         } else {
             return letters.charAt(i % letters.length());
         }
+    }
+
+    private static Optional<Double> recordsWrittenMetric(RestClusterClient<?> restClusterClient, JobID jobId) throws Exception {
+        JobDetailsInfo jobDetails = restClusterClient.getJobDetails(jobId).get();
+        JobVertexID vertexId = jobDetails
+            .getJobVertexInfos().stream()
+            .filter(v -> v.getName().startsWith("Source: "))
+            .findFirst()
+            .map(JobDetailsInfo.JobVertexDetailsInfo::getJobVertexID)
+            .orElse(null);
+
+        Assertions.assertThat(vertexId).isNotNull();
+
+        Optional<String> metricList = getMetrics(restClusterClient, jobDetails.getJobId(), vertexId, "")
+            .getMetrics()
+            .stream()
+            .map(AggregatedMetric::getId)
+            .filter(s -> s.endsWith(MetricNames.IO_NUM_RECORDS_IN) && s.startsWith("Source__"))
+            .findFirst();
+
+        Assertions.assertThat(metricList).isPresent();
+
+        return getMetrics(restClusterClient, jobDetails.getJobId(), vertexId, metricList.get())
+            .getMetrics().stream()
+            .findFirst()
+            .map(AggregatedMetric::getSum);
+    }
+
+    private static AggregatedMetricsResponseBody getMetrics(RestClusterClient<?> restClusterClient,
+                                                            JobID jobId,
+                                                            JobVertexID vertexId,
+                                                            String filters) throws Exception {
+
+        AggregatedSubtaskMetricsParameters params = new AggregatedSubtaskMetricsParameters();
+        Iterator<MessagePathParameter<?>> pathParams = params.getPathParameters().iterator();
+        ((JobIDPathParameter) pathParams.next()).resolve(jobId);
+        ((JobVertexIdPathParameter) pathParams.next()).resolve(vertexId);
+        if (filters.length() > 0) {
+            MetricsFilterParameter metricFilter = (MetricsFilterParameter)
+                params.getQueryParameters().iterator().next();
+            metricFilter.resolveFromString(filters);
+        }
+        return restClusterClient.sendRequest(
+            AggregatedSubtaskMetricsHeaders.getInstance(),
+            params,
+            EmptyRequestBody.getInstance()
+        ).get(10, TimeUnit.SECONDS);
     }
 }

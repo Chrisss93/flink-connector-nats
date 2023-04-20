@@ -3,6 +3,7 @@ package com.github.chrisss93.connector.nats.source;
 import com.github.chrisss93.connector.nats.testutils.NATSTestContext;
 import com.github.chrisss93.connector.nats.testutils.NatsTestContextFactory;
 import com.github.chrisss93.connector.nats.testutils.NatsTestEnvironment;
+import com.github.chrisss93.connector.nats.testutils.SinkCollector;
 import com.github.chrisss93.connector.nats.testutils.source.JetStreamSourceContext;
 import com.github.chrisss93.connector.nats.testutils.source.cases.AckEachContext;
 import com.github.chrisss93.connector.nats.testutils.source.cases.MultiThreadedFetcherContext;
@@ -11,7 +12,6 @@ import io.nats.client.api.StreamConfiguration;
 import io.nats.client.api.StreamInfoOptions;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.Source;
 import org.apache.flink.connector.testframe.environment.MiniClusterTestEnvironment;
@@ -27,14 +27,8 @@ import org.apache.flink.connector.testframe.testsuites.SourceTestSuiteBase;
 import org.apache.flink.connector.testframe.utils.CollectIteratorAssertions;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.CheckpointingMode;
-import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
-import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.operators.collect.CollectResultIterator;
-import org.apache.flink.streaming.api.operators.collect.CollectSinkOperator;
-import org.apache.flink.streaming.api.operators.collect.CollectSinkOperatorFactory;
-import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
 import org.apache.flink.util.CloseableIterator;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -42,7 +36,6 @@ import org.junit.jupiter.api.TestTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static java.util.Collections.singletonList;
@@ -117,11 +110,11 @@ public class JetStreamSourceITCase extends SourceTestSuiteBase<String> {
         DataStreamSource<String> stream =
             execEnv.fromSource(source, WatermarkStrategy.noWatermarks(), "Tested Source")
                 .setParallelism(splitNumber);
-        SinkIterator iteratorBuilder = SinkIterator.apply(stream);
+        SinkCollector<String> sinkCollector = SinkCollector.apply(stream);
         JobClient jobClient = submitJob(execEnv, "Source Split Discovery");
 
         // Step 4: Validate test data
-        try (CloseableIterator<String> resultIterator = iteratorBuilder.build(jobClient)) {
+        try (CloseableIterator<String> resultIterator = sinkCollector.build(jobClient)) {
             // Check initial test result
             int testRecordsSize = testRecordsLists.stream().mapToInt(List::size).sum();
             checkResultWithSemantic(resultIterator, testRecordsLists, semantic, testRecordsSize);
@@ -175,34 +168,6 @@ public class JetStreamSourceITCase extends SourceTestSuiteBase<String> {
         } else {
             CollectIteratorAssertions.assertThat(resultIterator)
                 .matchesRecordsFromSource(testData, semantic);
-        }
-    }
-
-    static class SinkIterator extends CollectIteratorBuilder<String> {
-        protected static SinkIterator apply(DataStream<String> stream) {
-            TypeSerializer<String> serializer =
-                stream.getType().createSerializer(stream.getExecutionConfig());
-            String accumulatorName = "dataStreamCollect_" + UUID.randomUUID();
-            CollectSinkOperatorFactory<String> factory =
-                new CollectSinkOperatorFactory<>(serializer, accumulatorName);
-            CollectSinkOperator<String> operator = (CollectSinkOperator<String>) factory.getOperator();
-            CollectStreamSink<String> sink = new CollectStreamSink<>(stream, factory);
-            sink.name("Data stream collect sink");
-            stream.getExecutionEnvironment().addOperator(sink.getTransformation());
-            return new SinkIterator(
-                operator,
-                serializer,
-                accumulatorName,
-                stream.getExecutionEnvironment().getCheckpointConfig());
-        }
-        public CollectResultIterator<String> build(JobClient jobClient) {
-            return super.build(jobClient);
-        }
-        protected SinkIterator(CollectSinkOperator<String> operator,
-                               TypeSerializer<String> serializer,
-                               String accumulatorName,
-                               CheckpointConfig checkpointConfig) {
-            super(operator, serializer, accumulatorName, checkpointConfig);
         }
     }
 }
