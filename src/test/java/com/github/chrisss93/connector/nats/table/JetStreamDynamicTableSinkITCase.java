@@ -22,7 +22,6 @@ import static java.util.Collections.singletonMap;
 
 public class JetStreamDynamicTableSinkITCase extends NatsTestSuiteBase {
 
-    private static StreamExecutionEnvironment env;
     private static StreamTableEnvironment tEnv;
     private static final byte[] PUBLISH_ACK_BODY = "{\"stream\":\"\", \"seq\": 1}".getBytes(UTF_8);
     private static final String jsonTemplate = "{\"colour\":\"%s\"}";
@@ -33,8 +32,7 @@ public class JetStreamDynamicTableSinkITCase extends NatsTestSuiteBase {
 
     @BeforeEach
     public void beforeEach() {
-        env = StreamExecutionEnvironment.getExecutionEnvironment();
-        tEnv = StreamTableEnvironment.create(env);
+        tEnv = StreamTableEnvironment.create(StreamExecutionEnvironment.getExecutionEnvironment());
     }
 
     @Test

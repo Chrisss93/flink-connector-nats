@@ -1,6 +1,5 @@
 package com.github.chrisss93.connector.nats.source.enumerator;
 
-import com.github.chrisss93.connector.nats.common.SubjectUtils;
 import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
 import com.github.chrisss93.connector.nats.source.event.FinishedSplitsEvent;
 import com.github.chrisss93.connector.nats.source.event.RevokeSplitsEvent;
