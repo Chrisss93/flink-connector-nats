@@ -6,7 +6,6 @@ import io.nats.client.impl.Headers;
 import io.nats.client.impl.NatsMessage;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.table.data.ArrayData;
-import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.MapData;
 import org.apache.flink.table.data.RowData;
 
@@ -27,25 +26,7 @@ public class TableSerializationSchema implements NATSMessageSerializationSchema<
 
     @Override
     public byte[] serialize(RowData row) {
-        int size = row.getArity();
-        if (subjectFieldIndex >= 0) {
-            size--;
-        }
-        if (headerFieldIndex >= 0) {
-            size--;
-        }
-        GenericRowData original = (GenericRowData) row;
-        GenericRowData narrowed = new GenericRowData(row.getRowKind(), size);
-
-        int i = 0;
-        for (int j = 0; j < size; j++) {
-            if (j == subjectFieldIndex || j == headerFieldIndex) {
-                continue;
-            }
-            narrowed.setField(i, original.getField(j));
-            i++;
-        }
-        return codec.serialize(narrowed);
+        return codec.serialize(row);
     }
 
     @Override

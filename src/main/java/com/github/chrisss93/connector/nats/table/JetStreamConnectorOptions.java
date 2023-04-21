@@ -9,9 +9,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.github.chrisss93.connector.nats.table.JetStreamDynamicTableSink.SUBJECT_FIELD;
-
 public class JetStreamConnectorOptions {
+
+    public static final String SUBJECT_FIELD = "nats_subject";
 
     public static final ConfigOption<List<String>> SERVER_URLS =
         ConfigOptions.key(Options.PROP_SERVERS)

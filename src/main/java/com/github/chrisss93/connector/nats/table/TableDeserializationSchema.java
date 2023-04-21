@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static com.github.chrisss93.connector.nats.table.JetStreamConnectorOptions.SUBJECT_FIELD;
+
 public class TableDeserializationSchema implements NATSMessageDeserializationSchema<RowData> {
 
     private final DeserializationSchema<RowData> codec;
@@ -54,27 +56,33 @@ public class TableDeserializationSchema implements NATSMessageDeserializationSch
     static class MetadataHandler {
         private static final String headerKey = "headers";
         private static final String streamKey = "stream";
-        private static final String subjectKey = "subject";
         private static final String consumerKey = "consumer";
         private static final String domainKey = "domain";
         private static final String deliveredKey = "delivered";
         private static final String streamSeqKey = "streamSeq";
         private static final String consumerSeqKey = "consumerSeq";
-        private static final String timestampKey = "timestamp";
         private static final String pendingKey = "pending";
+        private static final String timestampKey = "timestamp";
+        private static final String timezoneKey = "timezone";
         final static Map<String, DataType>  CATALOG;
         static {
             CATALOG = new HashMap<>();
             CATALOG.put(headerKey, DataTypes.MAP(DataTypes.STRING(), DataTypes.ARRAY(DataTypes.STRING())));
             CATALOG.put(streamKey, DataTypes.STRING());
-            CATALOG.put(subjectKey, DataTypes.STRING());
+            CATALOG.put(SUBJECT_FIELD, DataTypes.STRING());
             CATALOG.put(consumerKey, DataTypes.STRING());
             CATALOG.put(domainKey, DataTypes.STRING());
             CATALOG.put(deliveredKey, DataTypes.BIGINT());
             CATALOG.put(streamSeqKey, DataTypes.BIGINT());
             CATALOG.put(consumerSeqKey, DataTypes.BIGINT());
-            CATALOG.put(timestampKey, DataTypes.TIMESTAMP_WITH_TIME_ZONE(9));
             CATALOG.put(pendingKey, DataTypes.BIGINT());
+            /*
+            Flink does not fully support TIMESTAMP_WITH_TIME_ZONE, so we separate the UTC representation and
+            the corresponding timezone (in case it is useful  to recover the NATS message's
+            originating timezone). Check FLINK-20869 for future updates.
+            */
+            CATALOG.put(timestampKey, DataTypes.TIMESTAMP_WITH_LOCAL_TIME_ZONE(9));
+            CATALOG.put(timezoneKey, DataTypes.STRING());
         }
 
         private static Object extract(String key, Message msg) {
@@ -98,7 +106,7 @@ public class TableDeserializationSchema implements NATSMessageDeserializationSch
                     );
                 case streamKey:
                     return StringData.fromString(msg.metaData().getStream());
-                case subjectKey:
+                case SUBJECT_FIELD:
                     return StringData.fromString(msg.getSubject());
                 case consumerKey:
                     return StringData.fromString(msg.metaData().getConsumer());
@@ -111,7 +119,9 @@ public class TableDeserializationSchema implements NATSMessageDeserializationSch
                 case consumerSeqKey:
                     return msg.metaData().consumerSequence();
                 case timestampKey:
-                    return msg.metaData().timestamp();
+                    return msg.metaData().timestamp().toInstant();
+                case timezoneKey:
+                    return msg.metaData().timestamp().getZone().getId();
                 case pendingKey:
                     return msg.metaData().pendingCount();
             }

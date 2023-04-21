@@ -76,18 +76,19 @@ A Table API factory has been implemented for a `ScanTableSource` and `DynamicTab
 
 The following metadata fields are available:
 
-| Name        | Type                          | Readable | Writeable |
-|-------------|-------------------------------|----------|-----------|
-| headers     | MAP<VARCHAR, ARRAY\<VARCHAR>> | &check;  | &check;   |
-| subject     | VARCHAR                       | &check;  | &check;   |
-| stream      | VARCHAR                       | &check;  | &cross;   |
-| consumer    | VARCHAR                       | &check;  | &cross;   |
-| domain      | VARCHAR                       | &check;  | &cross;   |
-| delivered   | BIGINT                        | &check;  | &cross;   |
-| streamSeq   | BIGINT                        | &check;  | &cross;   |
-| consumerSeq | BIGINT                        | &check;  | &cross;   |
-| timestamp   | TIMESTAMP(9)                  | &check;  | &cross;   |
-| pending     | BIGINT                        | &check;  | &cross;   |
+| Name         | Type                          | Readable | Writeable |
+|--------------|-------------------------------|----------|-----------|
+| headers      | MAP<VARCHAR, ARRAY\<VARCHAR>> | &check;  | &check;   |
+| nats_subject | VARCHAR                       | &check;  | &check;   |
+| stream       | VARCHAR                       | &check;  | &cross;   |
+| consumer     | VARCHAR                       | &check;  | &cross;   |
+| domain       | VARCHAR                       | &check;  | &cross;   |
+| delivered    | BIGINT                        | &check;  | &cross;   |
+| streamSeq    | BIGINT                        | &check;  | &cross;   |
+| consumerSeq  | BIGINT                        | &check;  | &cross;   |
+| pending      | BIGINT                        | &check;  | &cross;   |
+| timestamp    | TIMESTAMP_LTZ(9)              | &check;  | &cross;   |
+| timezone     | VARCHAR                       | &check;  | &cross;   |
 
 The Table Source supports limit push-down, watermark push-down and a very limited degree of filter push-down.
 
@@ -130,25 +131,25 @@ For table sinks (ie. `INSERT` statements), if the `subject` metadata field is no
 CREATE TABLE foo_input (
   name VARCHAR,
   age INT,
-  subject VARCHAR METADATA,
-  headers MAP<VARCHAR, ARRAY<VARCHAR>> METADATA,
-  timestamp TIMESTAMP(9) METADATA VIRTUAL
+  nats_subject STRING METADATA,
+  headers MAP<STRING, ARRAY<STRING>> METADATA,
+  `timestamp` TIMESTAMP_LTZ(9) METADATA VIRTUAL
 ) WITH (
-  "connector" = "nats",
-  "io.nats.client.servers" = "nats://...",
-  "stream" = "foo",
-  "format" = "json"
+  'connector' = 'nats',
+  'io.nats.client.servers' = 'nats://...',
+  'stream' = 'foo',
+  'format' = 'json'
 );
 
 CREATE TABLE bar_output (
   short_name VARCHAR,
   DOB INT,
-  subject VARCHAR METADATA
-  headers MAP<VARCHAR, ARRAY<VARCHAR>> METADATA
+  nats_subject STRING METADATA,
+  headers MAP<STRING, ARRAY<STRING>> METADATA
 ) WITH (
-  "connector" = "nats",
-  "io.nats.client.servers" = "nats://...",
-  "format" = "json"
+  'connector' = 'nats',
+  'io.nats.client.servers' = 'nats://...',
+  'format' = 'json'
 );
 
 INSERT INTO bar_output
@@ -157,11 +158,11 @@ SELECT
   2023 - age,
   "bar." || SUBSTR(UPPER(name), 0, 1),
   MAP[
-    "version", ARRAY["0.1", "0.1-SNAPSHOT"],
-    "traceId", headers["traceId"]
+    'version', ARRAY['0.1', '0.1-SNAPSHOT'],
+    'traceId', headers['traceId']
   ]
 FROM foo_input
-WHERE subject IN ("a", "b") AND age >= 18
+WHERE nats_subject IN ("a", "b") AND age >= 18
 LIMIT 10;
 ```
 

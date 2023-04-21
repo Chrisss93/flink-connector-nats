@@ -109,8 +109,11 @@ public class JetStreamDynamicTableSource implements ScanTableSource, SupportsRea
 
     @Override
     public void applyReadableMetadata(List<String> metadataKeys, DataType producedDataType) {
-        this.metadataKeys.addAll(metadataKeys);
         this.producedDataType = producedDataType;
+        if (!metadataKeys.isEmpty()) {
+            this.metadataKeys.clear();
+        }
+        this.metadataKeys.addAll(metadataKeys);
     }
 
     @Override

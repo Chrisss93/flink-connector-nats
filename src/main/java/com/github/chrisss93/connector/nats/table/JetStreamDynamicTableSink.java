@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static com.github.chrisss93.connector.nats.table.JetStreamConnectorOptions.SINK_SUBJECT;
+import static com.github.chrisss93.connector.nats.table.JetStreamConnectorOptions.SUBJECT_FIELD;
 
 public class JetStreamDynamicTableSink implements DynamicTableSink, SupportsWritingMetadata {
 
@@ -54,16 +55,14 @@ public class JetStreamDynamicTableSink implements DynamicTableSink, SupportsWrit
     public void applyWritableMetadata(List<String> metadataKeys, DataType consumedDataType) {
         if (subject == null && !metadataKeys.contains(SUBJECT_FIELD)) {
             throw new TableException("Since the config option: '" + SINK_SUBJECT.key() + "' is not set, " +
-                "the following VARCHAR METADATA field must be present: " + SUBJECT_FIELD);
+                "the following VARCHAR/STRING castable METADATA field must be present: " + SUBJECT_FIELD);
         }
         List<DataTypes.Field> fields = DataType.getFields(consumedDataType);
         for (int i = 0; i < fields.size(); i++) {
             DataTypes.Field field = fields.get(i);
-            if (subject == null &&
-                field.getName().equals(SUBJECT_FIELD) &&
-                field.getDataType().equals(DataTypes.STRING())) {
+            if (subject == null && field.getName().equals(SUBJECT_FIELD)) {
                 subjectFieldIndex = i;
-            } else if (field.getName().equals(HEADER_FIELD) && field.getDataType().equals(HEADER_TYPE)) {
+            } else if (field.getName().equals(HEADER_FIELD)) {
                 headerFieldIndex = i;
             }
         }
@@ -74,7 +73,6 @@ public class JetStreamDynamicTableSink implements DynamicTableSink, SupportsWrit
         return METADATA;
     }
 
-    static final String SUBJECT_FIELD = "sink_subject";
     private static final String HEADER_FIELD = "headers";
     private static final DataType HEADER_TYPE = DataTypes.MAP(
         DataTypes.STRING(),

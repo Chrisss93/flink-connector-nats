@@ -106,7 +106,7 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
         String streamName = sanitizeDisplay(info);
         String[] subjects = new String[NUM_SUBJECTS];
         for (int i = 0; i < NUM_SUBJECTS; i++) {
-            subjects[i] = String.format("subject = '%s.standard.%d'", streamName, i);
+            subjects[i] = String.format("nats_subject = '%s.standard.%d'", streamName, i);
         }
 
         String predicate = String.join(" OR ", subjects);
@@ -121,14 +121,14 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
             subjects[i] = String.format("'%s.standard.%d'", streamName, i);
         }
 
-        String predicate = "subject IN (" + String.join(", ", subjects) + ")";
+        String predicate = "nats_subject IN (" + String.join(", ", subjects) + ")";
         filterPushDownQuery(streamName, predicate, false);
     }
 
     @Test
     public void filterPushDownLike(TestInfo info) throws Exception {
         String streamName = sanitizeDisplay(info);
-        String predicate = String.format("subject LIKE '%s.standard.%%'", streamName);
+        String predicate = String.format("nats_subject LIKE '%s.standard.%%'", streamName);
         filterPushDownQuery(streamName, predicate, true);
     }
 
@@ -149,7 +149,7 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
 
         DataStream<Row> datastream = tEnv.toDataStream(
             tEnv.sqlQuery(
-                "SELECT * FROM nats_source WHERE id % 2 = 0 AND subject LIKE '" + streamName + ".standard.%'"
+                "SELECT * FROM nats_source WHERE id % 2 = 0 AND nats_subject LIKE '" + streamName + ".standard.%'"
             )
         );
         SinkCollector<Row> sinkCollector = SinkCollector.apply(datastream);
@@ -195,7 +195,7 @@ public class JetStreamDynamicTableSourceITCase extends NatsTestSuiteBase {
     private String createTableDDL(String stream, Map<String, String> extraOptions) {
         return String.join("\n", Arrays.asList(
             "CREATE TABLE nats_source (",
-            "subject VARCHAR METADATA,",
+            "nats_subject VARCHAR METADATA,",
             "id BIGINT,",
             "name VARCHAR,",
             "age INT,",

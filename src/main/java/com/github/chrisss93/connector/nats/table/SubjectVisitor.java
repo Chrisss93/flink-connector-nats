@@ -11,25 +11,27 @@ import java.util.HashMap;
 import java.util.Optional;
 import java.util.function.Function;
 
+import static com.github.chrisss93.connector.nats.table.JetStreamConnectorOptions.SUBJECT_FIELD;
 import static java.util.Collections.singletonList;
 import static java.util.Arrays.asList;
 
 public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<String>> {
-    private static final String FIELD_NAME = "subject";
     private static final HashMap<FunctionDefinition, Function<Object, Collection<String>>> VALID_FUNCS;
     static {
         VALID_FUNCS = new HashMap<>();
 
         VALID_FUNCS.put(BuiltInFunctionDefinitions.EQUALS, (value) -> {
             if (!(value instanceof String)) {
-                throw new ExpressionParserException("SHIT");
+                throw new ExpressionParserException("Function '" +
+                    BuiltInFunctionDefinitions.EQUALS + "' is applied to unknown value type: " + value);
             }
             return new ArrayList<>(singletonList((String) value));
         });
 
         VALID_FUNCS.put(BuiltInFunctionDefinitions.LIKE, (value) -> {
             if (!(value instanceof String)) {
-                throw new ExpressionParserException("SHIT");
+                throw new ExpressionParserException("Function '" +
+                    BuiltInFunctionDefinitions.LIKE + "' is applied to unknown value type: " + value);
             }
             String str = (String) value;
             if (str.matches(".*_.*")) {
@@ -41,11 +43,11 @@ public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<
 
         VALID_FUNCS.put(BuiltInFunctionDefinitions.IN, (value) -> {
             if (!(value instanceof String[])) {
-                throw new ExpressionParserException("SHIT");
+                throw new ExpressionParserException("Function '" +
+                    BuiltInFunctionDefinitions.IN + "' is applied to unknown value type: " + value);
             }
             return new ArrayList<>(asList((String[]) value));
         });
-
     }
 
 
@@ -87,8 +89,8 @@ public class SubjectVisitor extends ResolvedExpressionDefaultVisitor<Collection<
                 return null;
         }
 
-        // Only handle expressions referencing the FIELD_NAME
-        if (!FIELD_NAME.equals(fieldName)) {
+        // Only handle expressions referencing the SUBJECT_FIELD
+        if (!SUBJECT_FIELD.equals(fieldName)) {
             return null;
         }
 
