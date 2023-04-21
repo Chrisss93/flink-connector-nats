@@ -94,7 +94,7 @@ The Table Source supports limit push-down, watermark push-down and a very limite
 
 ### Filter push-down
 
-Importantly here, the field-name: `subject` (case-sensitive) is reserved for the corresponding metadata field, and it will be pushed-down if an expression with it is present in the `WHERE` clause of a table query. For now the expression parser remains very simplistic so only basic predicates referencing the unmodified `subject` field and one or more values can be pushed down.
+Importantly here, the field-name: `nats_subject` (case-sensitive) is reserved for the corresponding metadata field, and it will be pushed-down if an expression with it is present in the `WHERE` clause of a table query. For now the expression parser remains very simplistic so only basic predicates referencing the unmodified `nats_subject` field and one or more literal values can be pushed down.
 
 For example, the following SQL predicates can be pushed down:
 ```sql
