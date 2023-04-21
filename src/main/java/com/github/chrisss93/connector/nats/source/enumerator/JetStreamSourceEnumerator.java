@@ -37,7 +37,6 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
 
     private final Map<Integer, Set<JetStreamConsumerSplit>> assignedSplits = new HashMap<>();
     private final Map<Integer, Set<JetStreamConsumerSplit>> pendingSplitAssignments = new HashMap<>();
-    private final Set<String> finishedSplits = new HashSet<>();
 
     public JetStreamSourceEnumerator(
         Properties connectProps,
