@@ -1,11 +1,18 @@
 package com.github.chrisss93.connector.nats.common;
 
 import java.util.Arrays;
+import java.util.Random;
+
+import static org.apache.commons.lang3.RandomStringUtils.random;
 
 public abstract class SubjectUtils {
     private static final String SEP = "\\.";
     private static final char PARTIAL_WILDCARD = '*';
     private static final char FULL_WILDCARD = '>';
+
+    public static String consumerName(String prefix, String subjectFilter) {
+        return prefix + "-" + random(5, 0, 0, true, false, null, new Random(subjectFilter.hashCode()));
+    }
 
     public static boolean overlappingFilterSubjects(String[] filters) {
         for (int i = 0; i < filters.length; i++) {

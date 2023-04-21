@@ -5,6 +5,8 @@ import com.github.chrisss93.connector.nats.source.reader.deserializer.NATSMessag
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.NeverStop;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.StartRule;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.StopRule;
+import io.nats.client.Connection;
+import io.nats.client.Nats;
 import io.nats.client.Options;
 import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
@@ -12,6 +14,8 @@ import io.nats.client.api.DeliverPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.Serializable;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -20,17 +24,17 @@ import java.util.*;
 import static io.nats.client.support.Validator.validateStreamName;
 import static org.apache.flink.util.Preconditions.*;
 
-public class JetStreamSourceBuilder<T> {
+public class JetStreamSourceBuilder<T> implements Serializable {
     private static final Logger LOG = LoggerFactory.getLogger(JetStreamSourceBuilder.class);
 
     private String stream;
-    private Properties connectProps = new Properties();
+    private final Properties connectProps = new Properties();
     private StopRule stopRule = new NeverStop();
     private StartRule startRule = StartRule.EARLIEST;
     private long startValue = -1;
     private NATSMessageDeserializationSchema<T> deserializationSchema;
-    private final Set<ConsumerConfiguration.Builder> consumers = new HashSet<>();
-    private ConsumerConfiguration.Builder defaultConsumer;
+    private final Set<NATSConsumerConfig> consumers = new HashSet<>();
+    private NATSConsumerConfig defaultConsumer;
     private boolean discoverSplits = false;
     private boolean ackMessageOnCheckpoint = true;
     private boolean ackEachMessage = false;
@@ -42,7 +46,7 @@ public class JetStreamSourceBuilder<T> {
         return this;
     }
 
-    public JetStreamSourceBuilder<T> setServerURLs(String[] addresses) {
+    public JetStreamSourceBuilder<T> setServerURLs(String... addresses) {
         connectProps.setProperty(Options.PROP_SERVERS, String.join(",", addresses));
         return this;
     }
@@ -58,8 +62,8 @@ public class JetStreamSourceBuilder<T> {
         return this;
     }
 
-    public JetStreamSourceBuilder<T>  setConnectionProperties(Properties props) {
-        connectProps = props;
+    public JetStreamSourceBuilder<T> setConnectionProperties(Map<?, ?> props) {
+        connectProps.putAll(props);
         return this;
     }
 
@@ -94,8 +98,11 @@ public class JetStreamSourceBuilder<T> {
     }
 
     public JetStreamSourceBuilder<T> addConsumerConfiguration(ConsumerConfiguration.Builder builder) {
-        consumers.add(builder);
+        consumers.add(new NATSConsumerConfig(builder.build()));
         return this;
+    }
+    public void clearConsumerConfigurations() {
+        consumers.clear();
     }
 
     public JetStreamSourceBuilder<T> setDefaultConsumerConfiguration(String prefix) {
@@ -108,8 +115,12 @@ public class JetStreamSourceBuilder<T> {
 
     public JetStreamSourceBuilder<T> setDefaultConsumerConfiguration(ConsumerConfiguration.Builder builder) {
         this.discoverSplits = true;
-        defaultConsumer = builder;
+        defaultConsumer = new NATSConsumerConfig(builder.build());
         return this;
+    }
+    public void clearDefaultConsumerConfiguration() {
+        this.defaultConsumer = null;
+        this.discoverSplits = false;
     }
 
     public JetStreamSourceBuilder<T> ackMessagesOnCheckpoint(boolean b) {
@@ -173,7 +184,21 @@ public class JetStreamSourceBuilder<T> {
         );
     }
 
-    public Set<NATSConsumerConfig>  makeNATSConsumerConfig(Collection<ConsumerConfiguration.Builder> configs) {
+    public Connection getConnection() throws IOException, InterruptedException {
+        return Nats.connect(new Options.Builder(connectProps).build());
+    }
+
+    public String getStream() {
+        return stream;
+    }
+
+    public NATSConsumerConfig getDefaultConsumer() {
+        return defaultConsumer;
+    }
+
+    private Set<NATSConsumerConfig>  makeNATSConsumerConfig(
+        Collection<? extends ConsumerConfiguration.Builder> configs) {
+
         Set<NATSConsumerConfig> natsConfig = new HashSet<>(configs.size());
         List<String> filters = new ArrayList<>(configs.size());
 
