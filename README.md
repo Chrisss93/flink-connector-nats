@@ -98,13 +98,13 @@ Importantly here, the field-name: `nats_subject` (case-sensitive) is reserved fo
 
 For example, the following SQL predicates can be pushed down:
 ```sql
-WHERE subject = "thing"
+WHERE subject = 'thing'
 ```
 ```sql
-WHERE subject LIKE "%.stuff"
+WHERE subject LIKE '%.stuff'
 ```
 ```sql
-WHERE subject IN ("one", "two")
+WHERE subject IN ('one', 'two')
 ```
 
 Meanwhile, the following SQL predicates cannot be pushed down and the filtering logic will be applied after the provider has fetched the records from all subjects:
@@ -113,7 +113,7 @@ Meanwhile, the following SQL predicates cannot be pushed down and the filtering 
 WHERE subject IN (otherField['validSubjects']) -- referencing another field
 ```
 ```sql
-WHERE UPPER(subject) == "SOMETHING" -- transforming the subject
+WHERE UPPER(subject) == 'SOMETHING' -- transforming the subject
 ```
 ```sql
 WHERE subject == 'prefix' || 'suffix' -- not a value literal
@@ -156,13 +156,13 @@ INSERT INTO bar_output
 SELECT
   UPPER(SUBSTRING(CHAR_LENGTH(name) - 3, name)),
   2023 - age,
-  "bar." || SUBSTR(UPPER(name), 0, 1),
+  'bar.' || SUBSTR(UPPER(name), 0, 1),
   MAP[
     'version', ARRAY['0.1', '0.1-SNAPSHOT'],
     'traceId', headers['traceId']
   ]
 FROM foo_input
-WHERE nats_subject IN ("a", "b") AND age >= 18
+WHERE nats_subject IN ('a', 'b') AND age >= 18
 LIMIT 10;
 ```
 
