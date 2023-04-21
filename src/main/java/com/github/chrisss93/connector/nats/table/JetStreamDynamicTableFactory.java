@@ -7,8 +7,12 @@ import com.github.chrisss93.connector.nats.source.NATSConsumerConfig;
 import com.github.chrisss93.connector.nats.source.enumerator.offsets.*;
 import io.nats.client.Options;
 import io.nats.client.api.ConsumerConfiguration;
+import org.apache.flink.api.common.serialization.DeserializationSchema;
+import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.table.connector.format.DecodingFormat;
+import org.apache.flink.table.connector.format.EncodingFormat;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.data.RowData;
@@ -80,14 +84,17 @@ public class JetStreamDynamicTableFactory implements DynamicTableSourceFactory, 
                 builder.setStoppingRule(new NumMessageStop(options.get(STOP_VALUE)));
                 break;
         }
+
+        DecodingFormat<DeserializationSchema<RowData>> format =
+            helper.discoverDecodingFormat(DeserializationFormatFactory.class, FactoryUtil.FORMAT);
+
         helper.validate();
 
         return new JetStreamDynamicTableSource(
             builder,
             prefix,
             context.getPhysicalRowDataType(),
-            helper.discoverDecodingFormat(DeserializationFormatFactory.class, FactoryUtil.FORMAT),
-            context.getCatalogTable().getPartitionKeys(),
+            format,
             context.getObjectIdentifier().asSummaryString()
         );
     }
@@ -103,6 +110,10 @@ public class JetStreamDynamicTableFactory implements DynamicTableSourceFactory, 
 
         String subject = options.get(SINK_SUBJECT);
         Integer parallelism = options.get(SINK_PARALLELISM);
+
+        EncodingFormat<SerializationSchema<RowData>> format =
+            helper.discoverEncodingFormat(SerializationFormatFactory.class, FactoryUtil.FORMAT);
+
         helper.validate();
 
         return new JetStreamDynamicTableSink(
@@ -110,7 +121,7 @@ public class JetStreamDynamicTableFactory implements DynamicTableSourceFactory, 
             subject,
             context.getPhysicalRowDataType(),
             parallelism,
-            helper.discoverEncodingFormat(SerializationFormatFactory.class, FactoryUtil.FORMAT)
+            format
         );
     }
 
@@ -126,7 +137,7 @@ public class JetStreamDynamicTableFactory implements DynamicTableSourceFactory, 
 
     @Override
     public Set<ConfigOption<?>> requiredOptions() {
-        return Collections.singleton(SERVER_URLS);
+        return new HashSet<>(Arrays.asList(SERVER_URLS, FactoryUtil.FORMAT));
     }
 
     @Override
@@ -139,7 +150,7 @@ public class JetStreamDynamicTableFactory implements DynamicTableSourceFactory, 
         FORWARD_OPTIONS = Stream.of(
             STREAM_NAME, CONSUMER_PREFIX, SUBJECT_FILTERS, SPLIT_DISCOVERY_MS, SINK_SUBJECT,
             USERNAME, PASSWORD, TOKEN,
-            STOP_RULE, STOP_VALUE, START_RULE, START_VALUE, CONSUMER_PROPS,
+            STOP_RULE, STOP_VALUE, START_RULE, START_VALUE, CONNECT_PROPS, CONSUMER_PROPS,
             FactoryUtil.FORMAT
         ).collect(Collectors.toSet());
     }

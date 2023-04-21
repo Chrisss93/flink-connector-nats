@@ -33,7 +33,6 @@ public class JetStreamDynamicTableSource implements ScanTableSource, SupportsRea
     private final JetStreamSourceBuilder<RowData> builder;
     private final String prefix;
     private final DecodingFormat<DeserializationSchema<RowData>> formatter;
-    private final List<String> partitionKeys;
     private final String tableIdentifier;
 
     // Mutable properties for Table Source Abilities
@@ -47,13 +46,11 @@ public class JetStreamDynamicTableSource implements ScanTableSource, SupportsRea
                                        String prefix,
                                        DataType physicalType,
                                        DecodingFormat<DeserializationSchema<RowData>> formatter,
-                                       List<String> partitionKeys,
                                        String tableIdentifier) {
         this.builder = builder;
         this.prefix = prefix;
         this.producedDataType = physicalType;
         this.formatter = formatter;
-        this.partitionKeys = partitionKeys;
         this.tableIdentifier = tableIdentifier;
     }
 
@@ -139,7 +136,7 @@ public class JetStreamDynamicTableSource implements ScanTableSource, SupportsRea
     @Override
     public DynamicTableSource copy() {
         JetStreamDynamicTableSource copy = new JetStreamDynamicTableSource(
-            builder, prefix, producedDataType, formatter, partitionKeys, tableIdentifier
+            builder, prefix, producedDataType, formatter, tableIdentifier
         );
         copy.metadataKeys.addAll(metadataKeys);
         copy.limit = limit;

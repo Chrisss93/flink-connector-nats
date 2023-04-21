@@ -46,7 +46,7 @@ public class JetStreamSourceBuilder<T> implements Serializable {
         return this;
     }
 
-    public JetStreamSourceBuilder<T> setServerURLs(String[] addresses) {
+    public JetStreamSourceBuilder<T> setServerURLs(String... addresses) {
         connectProps.setProperty(Options.PROP_SERVERS, String.join(",", addresses));
         return this;
     }

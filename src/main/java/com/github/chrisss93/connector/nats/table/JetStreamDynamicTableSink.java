@@ -97,6 +97,11 @@ public class JetStreamDynamicTableSink implements DynamicTableSink, SupportsWrit
 
     @Override
     public DynamicTableSink copy() {
-        return null;
+        JetStreamDynamicTableSink copy = new JetStreamDynamicTableSink(
+            connectProps, subject, consumedDataType, parallelism, formatter
+        );
+        copy.subjectFieldIndex = subjectFieldIndex;
+        copy.headerFieldIndex = headerFieldIndex;
+        return copy;
     }
 }
