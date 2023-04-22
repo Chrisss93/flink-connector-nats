@@ -20,8 +20,9 @@ public class MetricUtils {
     public static final String OUTSTANDING_REQUEST_FUTURES = "OutstandingRequestFutures";
     public static final String DUPLICATE_REPLIES_RECEIVED = "DuplicateRepliesReceived";
     public static final String RECONNECTS = "Reconnects";
+    public static final String DROPPED_MESSAGES = "DroppedMessages";
 
-    public static MetricGroup setServerMetrics(Connection connection, MetricGroup metricGroup) {
+    public static void registerServerMetrics(Connection connection, MetricGroup metricGroup) {
         MetricGroup group = metricGroup.addGroup(SERVER_INFO_GROUP);
         ServerInfo info = connection.getServerInfo();
         group.gauge(SERVER_ID_GAUGE, info::getServerId);
@@ -29,6 +30,5 @@ public class MetricUtils {
         group.gauge(SERVER_VERSION_GAUGE, info::getVersion);
         group.gauge(SERVER_ADDRESS_GAUGE, () -> info.getHost() + ":" + info.getPort());
         group.gauge(CLIENT_ID_GAUGE, info::getClientId);
-        return group;
     }
 }
