@@ -101,7 +101,7 @@ public class JetStreamConnectorOptions {
             .withDescription("An optional list of one or more subject filters to control which portions of the " +
                 "NATS stream to read into the table source. If left empty, every subject-filter for the stream" +
                 "is read. This setting may be overwritten if the table query has an applicable WHERE clause on" +
-                "a field called 'subject', which can be pushed-down.");
+                "a field called '" + SUBJECT_FIELD + "', which can be pushed-down.");
 
     public static final ConfigOption<Long> SPLIT_DISCOVERY_MS =
         ConfigOptions.key("subject.filter.discovery")

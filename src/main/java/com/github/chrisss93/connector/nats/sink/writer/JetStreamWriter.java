@@ -65,7 +65,7 @@ public class JetStreamWriter<T> implements SinkWriter<T> {
             throw new FlinkRuntimeException("Cannot initialize schema.", e);
         }
 
-        writerMetrics = new JetStreamSinkWriterMetrics(connection, initContext.metricGroup());
+        writerMetrics = new JetStreamSinkWriterMetrics(connection, initContext.metricGroup(), pendingMessages);
         registerMetricSync();
     }
 
@@ -121,8 +121,7 @@ public class JetStreamWriter<T> implements SinkWriter<T> {
             lastSync + METRIC_UPDATE_INTERVAL_MS,
             (time) -> {
                 if (!closed) {
-                    writerMetrics.updateMetrics();
-                    writerMetrics.updateInFlightRequests(pendingMessages);
+                    writerMetrics.update();
                     lastSync = time;
                     registerMetricSync();
                     // TODO: Sample and set the current-send-time between publish and acknowledgement

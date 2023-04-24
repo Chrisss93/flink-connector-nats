@@ -98,32 +98,32 @@ Importantly here, the field-name: `nats_subject` (case-sensitive) is reserved fo
 
 For example, the following SQL predicates can be pushed down:
 ```sql
-WHERE subject = 'thing'
+WHERE nats_subject = 'thing'
 ```
 ```sql
-WHERE subject LIKE '%.stuff'
+WHERE nats_subject LIKE '%.stuff'
 ```
 ```sql
-WHERE subject IN ('one', 'two')
+WHERE nats_subject IN ('one', 'two')
 ```
 
 Meanwhile, the following SQL predicates cannot be pushed down and the filtering logic will be applied after the provider has fetched the records from all subjects:
 
 ```sql
-WHERE subject IN (otherField['validSubjects']) -- referencing another field
+WHERE nats_subject IN (otherField['validSubjects']) -- referencing another field
 ```
 ```sql
-WHERE UPPER(subject) == 'SOMETHING' -- transforming the subject
+WHERE UPPER(nats_subject) == 'SOMETHING' -- transforming the subject
 ```
 ```sql
-WHERE subject == 'prefix' || 'suffix' -- not a value literal
+WHERE nats_subject == 'prefix' || 'suffix' -- not a value literal
 ```
 
-For now, there is a degree of concurrency but also resource-overhead when multiple predicates are pushed down (i.e. `WHERE subject = 'a' OR subject = 'b'` or `WHERE subject IN ('a', 'b')`) since this will create a NATS consumer for each subject filter and read them concurrently. When a push-down filter for multiple subjects is desired, if possible, use a pattern that can capture the desired subjects with the ANSI `LIKE` clause (`%` character will be translated into the NATS full-wildcard).
+For now, there is a degree of concurrency but also resource-overhead when multiple predicates are pushed down (i.e. `WHERE nats_subject = 'a' OR nats_subject = 'b'` or `WHERE nats_subject IN ('a', 'b')`) since this will create a NATS consumer for each subject filter and read them concurrently. When a push-down filter for multiple subjects is desired, if possible, use a pattern that can capture the desired subjects with the ANSI `LIKE` clause (`%` character will be translated into the NATS full-wildcard).
 
 ### Table Sinks
 
-For table sinks (ie. `INSERT` statements), if the `subject` metadata field is not present in the table, a static setting `sink.subject` can be configured to specify the NATS subject that every inserted row will be written to on the NATS server. As with the DataStream Sink API, the  subject (specified either statically with config-options or dynamically with the writeable metadata column) must have a subscriber on the NATS server or else be captured by a NATS stream. Otherwise, the insert statement will fail.
+For table sinks (ie. `INSERT` statements), if the `nats_subject` metadata field is not present in the table, a static setting `sink.subject` can be configured to specify the NATS subject that every inserted row will be written to on the NATS server. As with the DataStream Sink API, the  subject (specified either statically with config-options or dynamically with the writeable metadata column) must have a subscriber on the NATS server or else be captured by a NATS stream. Otherwise, the insert statement will fail.
 
 ### Usage
 

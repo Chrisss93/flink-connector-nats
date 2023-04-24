@@ -73,6 +73,12 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
         if (consumerConfigs.size() < 1) {
             throw new IllegalArgumentException("At least 1 consumerConfigs entry is required");
         }
+
+        if (context.metricGroup() != null) { // Can remove null-guard in Flink 1.18 (via FLINK-21000)
+            context.metricGroup().setUnassignedSplitsGauge(() ->
+                pendingSplitAssignments.values().stream().mapToLong(Set::size).sum()
+            );
+        }
     }
 
     @Override
@@ -175,12 +181,6 @@ public class JetStreamSourceEnumerator implements SplitEnumerator<JetStreamConsu
 
         if (boundedness == Boundedness.BOUNDED && splitDiscoveryIntervalMs < 0) {
             readers.forEach(context::signalNoMoreSplits);
-        }
-
-        if (context.metricGroup() != null) { // Can remove null-guard in Flink 1.18 (via FLINK-21000)
-            context.metricGroup().setUnassignedSplitsGauge(() ->
-                pendingSplitAssignments.values().stream().mapToLong(Set::size).sum()
-            );
         }
     }
 

@@ -78,7 +78,7 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
                 LOG.debug("Fetched {} new messages from split {}", i, splitId);
             }
         });
-        readerMetrics.updateMetrics();
+        readerMetrics.update();
         return recordsWithSplits.build();
     }
 
@@ -119,8 +119,10 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
         }
 
         if (splitsChanges instanceof SplitsRemoval) {
-            splitsChanges.splits().forEach(s -> shutdownSubscription.put(s.splitId(), true));
-            readerMetrics.updateConsumerCount(subscriptions.size() - shutdownSubscription.size());
+            splitsChanges.splits().forEach(s -> {
+                shutdownSubscription.put(s.splitId(), true);
+                readerMetrics.getConsumerCount().dec();
+            });
             return;
         }
 
@@ -132,9 +134,8 @@ public class JetStreamSplitReader implements SplitReader<Message, JetStreamConsu
             }
             createNatsConsumer(s);
             subscriptions.put(s.splitId(), subscribe(s.getStream(), s.getName()));
+            readerMetrics.getConsumerCount().inc();
         });
-
-        readerMetrics.updateConsumerCount(subscriptions.size());
     }
 
     @Override

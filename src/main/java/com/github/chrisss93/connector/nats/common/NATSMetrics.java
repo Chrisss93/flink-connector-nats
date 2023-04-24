@@ -1,6 +1,7 @@
 package com.github.chrisss93.connector.nats.common;
 
 import io.nats.client.Connection;
+import io.nats.client.Statistics;
 import org.apache.flink.metrics.MetricGroup;
 
 import java.text.NumberFormat;
@@ -9,14 +10,13 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class NATSMetrics {
+public class NATSMetrics implements Statistics {
     private static final String OKS_RECEIVED = "OKsReceived";
     private static final String AVERAGE_BYTES_PER_WRITE = "AverageBytesPerWrite";
     private static final String HANDLED_EXCEPTIONS = "HandledExceptions";
     private static final String MAX_BYTES_PER_WRITE = "MaxBytesPerWrite";
     private static final String MIN_BYTES_PER_WRITE = "MinBytesPerWrite";
     private static final String SOCKET_READS = "SocketReads";
-    private static final String DROPPED_MESSAGES = "DroppedMessages";
     private static final String MIN_BYTES_PER_READ = "MinBytesPerRead";
     private static final String MESSAGES_OUT = "Messagesout";
     private static final String REPLIES_RECEIVED = "RepliesReceived";
@@ -63,8 +63,8 @@ public class NATSMetrics {
         implementation's extra info except through its toString method, so we have to go about arduously parsing
         a large string. I don't expect this will be stable across client library updates...
      */
-    public NATSMetrics(Connection connection) {
-        Map<String, Number> m = Arrays.stream(connection.getStatistics().toString().split("\\n"))
+    public NATSMetrics(Statistics stats) {
+        Map<String, Number> m = Arrays.stream(stats.toString().split("\\n"))
             .filter(s -> !s.startsWith("#") && s.length() > 0)
             .collect(Collectors.toMap(
                 s -> s.split(":")[0].replaceAll("[^a-zA-Z]", ""),
@@ -83,7 +83,7 @@ public class NATSMetrics {
         maxBytesPerWrite = m.get(MAX_BYTES_PER_WRITE).longValue();
         minBytesPerWrite = m.get(MIN_BYTES_PER_WRITE).longValue();
         socketReads = m.get(SOCKET_READS).longValue();
-        droppedMessages = m.get(DROPPED_MESSAGES).longValue();
+        droppedMessages = m.get(MetricUtils.DROPPED_MESSAGES).longValue();
         minBytesPerRead = m.get(MIN_BYTES_PER_READ).longValue();
         messagesOut = m.get(MESSAGES_OUT).longValue();
         repliesReceived = m.get(REPLIES_RECEIVED).longValue();
@@ -102,28 +102,28 @@ public class NATSMetrics {
         errsReceived = m.get(ERRS_RECEIVED).longValue();
     }
 
-    public void addToMetricGroup(MetricGroup group) {
-        group.gauge(OKS_RECEIVED, this::getOksReceived);
-        group.gauge(AVERAGE_BYTES_PER_WRITE, this::getAverageBytesPerWrite);
-        group.gauge(HANDLED_EXCEPTIONS, this::getHandledExceptions);
-        group.gauge(MAX_BYTES_PER_WRITE, this::getMaxBytesPerWrite);
-        group.gauge(MIN_BYTES_PER_WRITE, this::getMinBytesPerWrite);
-        group.gauge(SOCKET_READS, this::getSocketReads);
-        group.gauge(DROPPED_MESSAGES, this::getDroppedMessages);
-        group.gauge(MIN_BYTES_PER_READ, this::getMinBytesPerRead);
-        group.gauge(REPLIES_RECEIVED, this::getRepliesReceived);
-        group.gauge(AVERAGE_BYTES_PER_READ, this::getAverageBytesPerRead);
-        group.gauge(PINGS_SENT, this::getPingsSent);
-        group.gauge(MAX_BYTES_PER_READ, this::getMaxBytesPerRead);
-        group.gauge(ORPHAN_REPLIES_RECEIVED, this::getOrphanRepliesReceived);
-        group.gauge(REQUESTS_SENT, this::getRequestsSent);
-        group.gauge(SUCCESSFUL_FLUSH_CALLS, this::getSuccessfulFlushCalls);
-        group.gauge(SOCKET_WRITES, this::getSocketWrites);
-        group.gauge(ERRS_RECEIVED, this::getErrsReceived);
+    public static void registerMetrics(MetricGroup group, Statistics stats) {
+        group.gauge(OKS_RECEIVED, new NATSMetrics(stats)::getOksReceived);
+        group.gauge(AVERAGE_BYTES_PER_WRITE, new NATSMetrics(stats)::getAverageBytesPerWrite);
+        group.gauge(HANDLED_EXCEPTIONS, new NATSMetrics(stats)::getHandledExceptions);
+        group.gauge(MAX_BYTES_PER_WRITE, new NATSMetrics(stats)::getMaxBytesPerWrite);
+        group.gauge(MIN_BYTES_PER_WRITE, new NATSMetrics(stats)::getMinBytesPerWrite);
+        group.gauge(SOCKET_READS, new NATSMetrics(stats)::getSocketReads);
+        group.gauge(MIN_BYTES_PER_READ, new NATSMetrics(stats)::getMinBytesPerRead);
+        group.gauge(REPLIES_RECEIVED, new NATSMetrics(stats)::getRepliesReceived);
+        group.gauge(AVERAGE_BYTES_PER_READ, new NATSMetrics(stats)::getAverageBytesPerRead);
+        group.gauge(PINGS_SENT, new NATSMetrics(stats)::getPingsSent);
+        group.gauge(MAX_BYTES_PER_READ, new NATSMetrics(stats)::getMaxBytesPerRead);
+        group.gauge(ORPHAN_REPLIES_RECEIVED, new NATSMetrics(stats)::getOrphanRepliesReceived);
+        group.gauge(REQUESTS_SENT, new NATSMetrics(stats)::getRequestsSent);
+        group.gauge(SUCCESSFUL_FLUSH_CALLS, new NATSMetrics(stats)::getSuccessfulFlushCalls);
+        group.gauge(SOCKET_WRITES, new NATSMetrics(stats)::getSocketWrites);
+        group.gauge(ERRS_RECEIVED, new NATSMetrics(stats)::getErrsReceived);
 
-        group.gauge(MetricUtils.OUTSTANDING_REQUEST_FUTURES, this::getOutstandingRequestFutures);
-        group.gauge(MetricUtils.DUPLICATE_REPLIES_RECEIVED, this::getDuplicateRepliesReceived);
-        group.gauge(MetricUtils.RECONNECTS, this::getReconnects);
+        group.gauge(MetricUtils.OUTSTANDING_REQUEST_FUTURES, new NATSMetrics(stats)::getOutstandingRequestFutures);
+        group.gauge(MetricUtils.DUPLICATE_REPLIES_RECEIVED, new NATSMetrics(stats)::getDuplicateRepliesReceived);
+        group.gauge(MetricUtils.RECONNECTS, new NATSMetrics(stats)::getReconnects);
+        group.gauge(MetricUtils.DROPPED_MESSAGES, new NATSMetrics(stats)::getDroppedCount);
     }
 
     public long getOksReceived() {
@@ -147,14 +147,8 @@ public class NATSMetrics {
     public long getSocketReads() {
 	    return socketReads;
 	}
-    public long getDroppedMessages() {
-	    return droppedMessages;
-	}
     public long getMinBytesPerRead() {
 	    return minBytesPerRead;
-	}
-    public long getMessagesOut() {
-	    return messagesOut;
 	}
     public long getRepliesReceived() {
 	    return repliesReceived;
@@ -168,14 +162,8 @@ public class NATSMetrics {
     public long getMaxBytesPerRead() {
 	    return maxBytesPerRead;
 	}
-    public long getBytesOut() {
-	    return bytesOut;
-	}
     public long getOrphanRepliesReceived() {
 	    return orphanRepliesReceived;
-	}
-    public long getBytesIn() {
-	    return bytesIn;
 	}
     public long getRequestsSent() {
 	    return requestsSent;
@@ -186,16 +174,35 @@ public class NATSMetrics {
     public long getSuccessfulFlushCalls() {
 	    return successfulFlushCalls;
 	}
-    public long getMessagesIn() {
-	    return messagesIn;
-	}
-    public long getReconnects() {
-	    return reconnects;
-	}
     public long getSocketWrites() {
 	    return socketWrites;
 	}
     public long getErrsReceived() {
 	    return errsReceived;
 	}
+
+    @Override
+    public long getOutBytes() {
+        return bytesOut;
+    }
+    @Override
+    public long getInBytes() {
+        return bytesIn;
+    }
+    @Override
+    public long getInMsgs() {
+        return messagesIn;
+    }
+    @Override
+    public long getOutMsgs() {
+        return messagesOut;
+    }
+    @Override
+    public long getReconnects() {
+        return reconnects;
+    }
+    @Override
+    public long getDroppedCount() {
+        return droppedMessages;
+    }
 }

@@ -3,6 +3,7 @@ package com.github.chrisss93.connector.nats.source.metrics;
 import com.github.chrisss93.connector.nats.common.NATSMetrics;
 import io.nats.client.Connection;
 import io.nats.client.Statistics;
+import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.groups.OperatorIOMetricGroup;
 import org.apache.flink.metrics.groups.SourceReaderMetricGroup;
@@ -22,55 +23,61 @@ public class JetStreamSourceReaderMetrics {
     private static final String CONSUMER_COUNT_GAUGE = "consumerCount";
 
     private final SourceReaderMetricGroup readerMetrics;
-    private final Connection connection;
     private final boolean advanced;
-    private final MetricGroup statsGroup;
+    private final Statistics statistics;
+    private final Counter consumerCounter;
     private long lastBytesIn = 0;
     private long lastMessagesIn = 0;
+    private Counter ackSuccessCounter;
+    private Counter ackFailCounter;
 
     public JetStreamSourceReaderMetrics(Connection connection, SourceReaderMetricGroup sourceReaderMetricGroup) {
-        this.connection = connection;
         this.readerMetrics = sourceReaderMetricGroup;
         this.advanced = connection.getOptions().isTrackAdvancedStats();
+        this.statistics = connection.getStatistics();
 
         MetricGroup readerGroup = this.readerMetrics.addGroup(READER_GROUP);
-        setServerMetrics(connection, readerGroup);
-        this.statsGroup = readerGroup.addGroup(STATS_GROUP);
-    }
+        registerServerMetrics(connection, readerGroup);
+        MetricGroup statsGroup = readerGroup.addGroup(STATS_GROUP);
+        consumerCounter = statsGroup.counter(CONSUMER_COUNT_GAUGE);
 
-    public void updateConsumerCount(int count) {
-        if (!advanced) statsGroup.gauge(CONSUMER_COUNT_GAUGE, () -> count);
-    }
-
-    public void updateAcks(boolean success) {
-        if (!advanced) statsGroup.counter(success ? ACK_SUCCESS_COUNTER : ACK_FAILURE_COUNTER).inc();
-    }
-
-    public void updateMetrics() {
         if (advanced) {
-            NATSMetrics metrics = new NATSMetrics(connection);
-            metrics.addToMetricGroup(statsGroup);
-            updateBytesIn(metrics.getBytesIn());
-//            updateMessagesIn(metrics.getMessagesIn() - metrics.getPingsSent() - metrics.getRequestsSent());
+            NATSMetrics.registerMetrics(statsGroup, statistics);
         } else {
-            Statistics stats = connection.getStatistics();
-            updateBytesIn(stats.getInBytes());
-//            updateMessagesIn(stats.getInMsgs());
-            updateReconnects(stats);
+            statsGroup.gauge(RECONNECTS, statistics::getReconnects);
+            statsGroup.gauge(DROPPED_MESSAGES, statistics::getDroppedCount);
+            ackSuccessCounter = statsGroup.counter(ACK_SUCCESS_COUNTER);
+            ackFailCounter = statsGroup.counter(ACK_FAILURE_COUNTER);
         }
     }
 
-    private void updateBytesIn(long current) {
+    public Counter getConsumerCount() {
+        return consumerCounter;
+    }
+
+    public void updateAcks(boolean success) {
+        if (advanced) return;
+        if (success) {
+            ackSuccessCounter.inc();
+        } else {
+            ackFailCounter.inc();
+        }
+    }
+
+    public void update() {
+        updateBytesIn();
+//        updateMessagesIn();
+    }
+
+    private void updateBytesIn() {
+        long current = statistics.getInBytes();
         readerMetrics.getIOMetricGroup().getNumBytesInCounter().inc(current - lastBytesIn);
         lastBytesIn = current;
     }
 
-    private void updateMessagesIn(long current) {
+    private void updateMessagesIn() {
+        long current = statistics.getInMsgs();
         readerMetrics.getIOMetricGroup().getNumRecordsInCounter().inc(current - lastMessagesIn);
         lastMessagesIn = current;
-    }
-
-    private void updateReconnects(Statistics stats) {
-        statsGroup.gauge(RECONNECTS, stats::getReconnects);
     }
 }
